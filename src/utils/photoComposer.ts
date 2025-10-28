@@ -193,7 +193,7 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   
   const tgl3 = new Date();
   const dateStr3 = `${tgl3.getFullYear()}.${(tgl3.getMonth()+1).toString().padStart(2,'0')}.${tgl3.getDate().toString().padStart(2,'0')}`;
-  const dateText = `PIXEL BOOTH // ${dateStr3}`;
+  const dateText = `MOROBOOTH // ${dateStr3}`;
   
   const dateY = margin + headerH + 40; // Below header with spacing
   out.text(dateText, W / 2, dateY);

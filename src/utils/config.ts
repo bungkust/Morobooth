@@ -1,4 +1,4 @@
-// Configuration utility for Pixel Booth
+// Configuration utility for Morobooth
 // Re-exports from configService for backward compatibility
 
 export { 

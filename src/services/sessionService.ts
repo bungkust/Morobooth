@@ -8,7 +8,7 @@ export interface SessionInfo {
   photoCount: number;
 }
 
-const DB_NAME = 'pixelbooth-db';
+const DB_NAME = 'morobooth-db';
 const SESSION_STORE = 'sessions';
 const PHOTO_STORE = 'photos';
 

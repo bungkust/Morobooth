@@ -79,7 +79,7 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
   return (
     <div id="template-selector">
       <div className="template-content">
-        <h1>Pixel Booth</h1>
+        <h1>Morobooth</h1>
         <p className="template-subtitle">Choose Your Photo Layout</p>
         
         <div className="template-dropdown-container">

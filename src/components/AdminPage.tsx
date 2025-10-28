@@ -363,7 +363,7 @@ export const AdminPage = () => {
                 
                 <div className="config-preview">
                   <div className="preview-text">
-                    <div className="main-text">{configOverride.enabled ? (configOverride.mainText || 'Pixel Booth') : 'Pixel Booth (default)'}</div>
+                    <div className="main-text">{configOverride.enabled ? (configOverride.mainText || 'Morobooth') : 'Morobooth (default)'}</div>
                     <div className="sub-text">{configOverride.enabled ? (configOverride.subText || '2025') : '2025 (default)'}</div>
                   </div>
                 </div>

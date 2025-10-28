@@ -1,4 +1,4 @@
-// Configuration management service for Pixel Booth
+// Configuration management service for Morobooth
 // Handles both config.txt and localStorage overrides
 
 export interface Config {
@@ -24,25 +24,25 @@ export async function loadConfig(): Promise<Config> {
     const override = getConfigOverride();
     if (override.enabled) {
       cachedConfig = {
-        mainText: override.mainText || 'Pixel Booth',
+        mainText: override.mainText || 'Morobooth',
         subText: override.subText || '2025'
       };
       return cachedConfig;
     }
 
     // Default values if no override
-    cachedConfig = { mainText: 'Pixel Booth', subText: '2025' };
+    cachedConfig = { mainText: 'Morobooth', subText: '2025' };
     return cachedConfig;
   } catch (error) {
     console.warn('Failed to load config, using defaults:', error);
-    cachedConfig = { mainText: 'Pixel Booth', subText: '2025' };
+    cachedConfig = { mainText: 'Morobooth', subText: '2025' };
     return cachedConfig;
   }
 }
 
 export function getConfigOverride(): ConfigOverride {
   try {
-    const stored = localStorage.getItem('pixelbooth_config_override');
+    const stored = localStorage.getItem('morobooth_config_override') || localStorage.getItem('pixelbooth_config_override');
     if (stored) {
       return JSON.parse(stored);
     }
@@ -59,7 +59,7 @@ export function getConfigOverride(): ConfigOverride {
 
 export function setConfigOverride(config: ConfigOverride): void {
   try {
-    localStorage.setItem('pixelbooth_config_override', JSON.stringify(config));
+    localStorage.setItem('morobooth_config_override', JSON.stringify(config));
     clearConfigCache(); // Clear cache so next load uses new config
   } catch (error) {
     console.error('Failed to save config override:', error);
@@ -69,7 +69,9 @@ export function setConfigOverride(config: ConfigOverride): void {
 
 export function clearConfigOverride(): void {
   try {
-    localStorage.removeItem('pixelbooth_config_override');
+    localStorage.removeItem('morobooth_config_override');
+    // Backward compatibility: remove old key if present
+    try { localStorage.removeItem('pixelbooth_config_override'); } catch {}
     clearConfigCache();
   } catch (error) {
     console.error('Failed to clear config override:', error);
@@ -83,7 +85,7 @@ export function clearConfigCache() {
 export function getConfigPreview(): string {
   const override = getConfigOverride();
   if (override.enabled) {
-    return `${override.mainText || 'Pixel Booth'}\n${override.subText || '2025'}`;
+    return `${override.mainText || 'Morobooth'}\n${override.subText || '2025'}`;
   }
   return 'Using config.txt values';
 }

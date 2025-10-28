@@ -65,7 +65,7 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({ onPermissionGran
     return (
       <div id="permission-gate">
         <div className="permission-content">
-          <h1>Pixel Booth</h1>
+          <h1>Morobooth</h1>
           <p>Memeriksa izin kamera...</p>
           <div className="loading-spinner"></div>
         </div>
@@ -76,7 +76,7 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({ onPermissionGran
   return (
     <div id="permission-gate">
       <div className="permission-content">
-        <h1>Pixel Booth</h1>
+        <h1>Morobooth</h1>
         <p>Izinkan akses kamera untuk memulai sesi foto Anda.</p>
         <button 
           id="permissionBtn" 

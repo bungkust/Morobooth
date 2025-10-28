@@ -11,7 +11,7 @@ export interface PhotoRecord {
   supabaseUrl?: string;
 }
 
-const DB_NAME = 'pixelbooth-db';
+const DB_NAME = 'morobooth-db';
 const PHOTO_STORE = 'photos';
 
 async function getDB() {

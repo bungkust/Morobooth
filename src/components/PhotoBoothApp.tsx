@@ -185,7 +185,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Pixel Booth Print</title>
+          <title>Morobooth Print</title>
           <style>
             @page {
               size: 58mm auto; /* Thermal roll width */
@@ -226,9 +226,9 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         </head>
         <body>
           <div class="print-container">
-            <img src="${dataURL}" alt="Pixel Booth Photo" class="print-image" />
+            <img src="${dataURL}" alt="Morobooth Photo" class="print-image" />
             <div class="print-footer">
-              PIXEL BOOTH<br/>
+              MOROBOOTH<br/>
               ${new Date().toLocaleDateString('id-ID')}
             </div>
           </div>
@@ -260,8 +260,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       if (typeof (navigator as any).share === 'function') {
         const resp = await fetch(dataURL);
         const blob = await resp.blob();
-        const file = new File([blob], 'pixelbooth-58mm.png', { type: 'image/png' });
-        const shareData: any = { files: [file], title: 'Pixel Booth', text: 'Print via thermal printer' };
+        const file = new File([blob], 'morobooth-58mm.png', { type: 'image/png' });
+        const shareData: any = { files: [file], title: 'Morobooth', text: 'Print via thermal printer' };
         const canShareFn = (navigator as any).canShare;
         const canShare = typeof canShareFn === 'function' ? canShareFn.call(navigator, shareData) : false;
         if (canShare) {
@@ -372,7 +372,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   return (
     <>
       <div className="app-header">
-        <h1 className="app-title">PIXEL BOOTH</h1>
+        <h1 className="app-title">MOROBOOTH</h1>
         <p className="template-info">Layout: {template.name}</p>
         <p className="app-description">
           SNAP & PRINT! PRESS START FOR A QUICK<br/>
@@ -437,7 +437,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       
       <div className="app-footer">
         <div className="stars">****</div>
-        <div>THANK YOU FOR SMILING WITH PIXEL BOOTH</div>
+        <div>THANK YOU FOR SMILING WITH MOROBOOTH</div>
       </div>
       
       <PreviewModal
