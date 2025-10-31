@@ -49,6 +49,18 @@ jobs:
         working-directory: ./apps/mobile
         run: npm ci
 
+      - name: Verify app.json configuration
+        working-directory: ./apps/mobile
+        run: |
+          echo "Checking app.json configuration..."
+          node -e "const config = require('./app.json'); console.log('Webview URL:', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
+          
+      - name: Ensure assets directory exists
+        working-directory: ./apps/mobile
+        run: |
+          mkdir -p android/app/src/main/assets
+          echo "Assets directory ready for bundle"
+
       - name: Prepare keystore (release only)
         if: ${{ inputs.buildType == 'release' }}
         working-directory: ./apps/mobile/android
@@ -57,14 +69,26 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release.keystore
 
-      - name: Build APK
+      - name: Build APK with Gradle
         working-directory: ./apps/mobile/android
         env:
+          EXPO_PUBLIC_WEBVIEW_URL: "https://morobooth.netlify.app"
+          NODE_ENV: "production"
+          # Ensure app.json ter-process dengan benar
+          EXPO_PUBLIC_PROJECT_ROOT: "../"
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_ALIAS_PASSWORD: ${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}
         run: |
           chmod +x gradlew
+          
+          # Gradle akan otomatis bundle JS melalui bundleCommand = "export:embed" di build.gradle
+          # bundleCommand akan memanggil: npx expo export:embed yang bundle JS dan embed ke assets/
+          # app.json akan ter-process oleh Expo dan Constants.expoConfig akan ter-populate
+          
+          echo "Building APK with webview URL: https://morobooth.netlify.app"
+          echo "Bundle command configured: export:embed (from build.gradle)"
+          
           if [ "${{ inputs.buildType }}" = "release" ]; then
             ./gradlew assembleRelease \
               -Pandroid.injected.signing.store.file=app/release.keystore \
@@ -73,6 +97,16 @@ jobs:
               -Pandroid.injected.signing.key.password=$ANDROID_KEY_ALIAS_PASSWORD
           else
             ./gradlew assembleDebug
+          fi
+          
+          # Verify bundle created
+          if [ -f "app/src/main/assets/index.android.bundle" ]; then
+            echo "✅ JavaScript bundle created successfully"
+            ls -lh app/src/main/assets/
+          else
+            echo "⚠️  JavaScript bundle not found in assets/"
+            echo "Listing assets directory:"
+            ls -la app/src/main/assets/ || echo "Assets directory does not exist"
           fi
 
       - name: Rename and prepare APK
