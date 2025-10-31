@@ -4,7 +4,8 @@ import { Controls } from './Controls';
 import { PreviewModal } from './PreviewModal';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { generateQRCodeDataURL, getDownloadURL } from '../utils/qrCodeGenerator';
-import { UniversalBluetoothPrinterService } from '../services/universalBluetoothPrinterService';
+import { HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
+import { nativeBridge } from '../services/nativeBridgeService';
 
 interface Template {
   id: string;
@@ -31,7 +32,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [, setIsReviewMode] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [highResImageDataURL, setHighResImageDataURL] = useState<string | null>(null);
-  const [bluetoothPrinter, setBluetoothPrinter] = useState<UniversalBluetoothPrinterService | null>(null);
+  const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
   const [bluetoothError, setBluetoothError] = useState<string>('');
   const [printerInfo, setPrinterInfo] = useState<{ name: string; width: number; dpi: number } | null>(null);
@@ -65,8 +66,22 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     return dataURL;
   };
   
-  const photoBoothRef = useRef<PhotoBoothRef>(null);
-  const { requestWakeLock, releaseWakeLock } = useWakeLock();
+  const [printProgress, setPrintProgress] = useState<{status: string, progress: number} | null>(null);
+
+  // Initialize native bridge
+  useEffect(() => {
+    nativeBridge.init();
+    
+    // Listen for print progress
+    const handler = (event: any) => {
+      setPrintProgress(event.detail);
+    };
+    window.addEventListener('printProgress', handler);
+    
+    return () => {
+      window.removeEventListener('printProgress', handler);
+    };
+  }, []);
 
   // Initialize wake lock when component mounts
   useEffect(() => {
@@ -297,20 +312,30 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const handleConnectBluetooth = async () => {
     try {
       setBluetoothError('');
-      if (!('bluetooth' in navigator)) {
-        setBluetoothError('Web Bluetooth not supported');
-        alert('Web Bluetooth not supported in this browser');
-        return;
-      }
-      const svc = new UniversalBluetoothPrinterService();
-      const connected = await svc.connect();
-      if (connected) {
+      const svc = new HybridBluetoothPrinterService();
+      
+      if (svc.isNativeEnvironment()) {
+        // Native: akan trigger scan & connect
+        await svc.connect();
         setBluetoothPrinter(svc);
         setIsBluetoothConnected(true);
-        setPrinterInfo(svc.getPrinterInfo());
-        alert(`Connected to ${svc.getPrinterInfo()?.name || 'Printer'}`);
       } else {
-        setBluetoothError('Failed to connect to printer');
+        // Web Bluetooth fallback
+        if (!('bluetooth' in navigator)) {
+          setBluetoothError('Web Bluetooth not supported');
+          alert('Web Bluetooth not supported in this browser');
+          return;
+        }
+        
+        const connected = await svc.connect();
+        if (connected) {
+          setBluetoothPrinter(svc);
+          setIsBluetoothConnected(true);
+          setPrinterInfo(svc.getPrinterInfo());
+          alert(`Connected to ${svc.getPrinterInfo()?.name || 'Printer'}`);
+        } else {
+          setBluetoothError('Failed to connect to printer');
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -404,6 +429,13 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           </div>
         )}
         {bluetoothError && <div className="bluetooth-error">{bluetoothError}</div>}
+        {/* Print progress indicator */}
+        {printProgress && (
+          <div className="print-progress">
+            <div className="progress-bar" style={{ width: `${printProgress.progress}%` }} />
+            <span>{printProgress.status}...</span>
+          </div>
+        )}
         {/* Share/Print helpers */}
         <button className="bluetooth-btn" onClick={handlePrint}>PRINT (Dialog)</button>
         <button className="bluetooth-btn" onClick={handleShareToPrintApp}>Share to Print App</button>
