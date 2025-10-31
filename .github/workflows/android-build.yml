@@ -31,6 +31,20 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Get version info
+        id: version
+        working-directory: ./apps/mobile
+        run: |
+          VERSION=$(node -p "require('./app.json').expo.version")
+          BUILD_DATE=$(date +'%Y%m%d')
+          BUILD_TIME=$(date +'%H%M%S')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+          echo "build_time=$BUILD_TIME" >> $GITHUB_OUTPUT
+          echo "APK_NAME=morobooth-v${VERSION}-${{ inputs.buildType }}-${BUILD_DATE}-${BUILD_TIME}" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+          echo "APK Name: morobooth-v${VERSION}-${{ inputs.buildType }}-${BUILD_DATE}-${BUILD_TIME}"
+
       - name: Install dependencies
         working-directory: ./apps/mobile
         run: npm ci
@@ -61,10 +75,29 @@ jobs:
             ./gradlew assembleDebug
           fi
 
+      - name: Rename and prepare APK
+        working-directory: ./apps/mobile/android/app/build/outputs/apk
+        run: |
+          # Find APK file
+          if [ "${{ inputs.buildType }}" = "release" ]; then
+            APK_FILE=$(find release -name "app-release.apk" | head -1)
+          else
+            APK_FILE=$(find debug -name "app-debug.apk" | head -1)
+          fi
+          
+          # Create output directory at repo root level
+          mkdir -p ../../../../../../output
+          
+          # Copy and rename APK
+          cp "$APK_FILE" "../../../../../../output/${{ steps.version.outputs.APK_NAME }}.apk"
+          
+          echo "APK renamed to: ${{ steps.version.outputs.APK_NAME }}.apk"
+          ls -lh "../../../../../../output/"
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.buildType }}-apk
-          path: apps/mobile/android/app/build/outputs/apk/**/*.apk
+          name: morobooth-v${{ steps.version.outputs.version }}-${{ inputs.buildType }}
+          path: output/${{ steps.version.outputs.APK_NAME }}.apk
           retention-days: 30
 
