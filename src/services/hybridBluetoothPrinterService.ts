@@ -53,6 +53,11 @@ export class HybridBluetoothPrinterService {
     nativeBridge.onMessage('PRINT_SUCCESS', (data) => {
       if (data.success) {
         console.log('Print successful via native');
+        // Notify UI
+        const event = new CustomEvent('printProgress', { 
+          detail: { status: 'Printed', progress: 100 } 
+        });
+        window.dispatchEvent(event);
       }
     });
 
