@@ -18,17 +18,31 @@ export class HybridBluetoothPrinterService {
   private setupNativeListeners(): void {
     nativeBridge.onMessage('BLUETOOTH_DEVICES_FOUND', (data) => {
       console.log('Devices found:', data.devices);
-      // Could trigger UI update here
+      // Notify UI
+      const event = new CustomEvent('bluetoothDevicesFound', { detail: { devices: data.devices } });
+      window.dispatchEvent(event);
     });
 
     nativeBridge.onMessage('BLUETOOTH_CONNECTED', (data) => {
       this.isConnected = data.connected;
       this.printerInfo = { name: 'Native Bluetooth Printer', address: data.device?.id };
+      
+      // Notify UI
+      const event = new CustomEvent('bluetoothStatusChange', { 
+        detail: { connected: true, info: this.printerInfo } 
+      });
+      window.dispatchEvent(event);
     });
 
     nativeBridge.onMessage('BLUETOOTH_DISCONNECTED', () => {
       this.isConnected = false;
       this.printerInfo = null;
+      
+      // Notify UI
+      const event = new CustomEvent('bluetoothStatusChange', { 
+        detail: { connected: false, info: null } 
+      });
+      window.dispatchEvent(event);
     });
 
     nativeBridge.onMessage('BLUETOOTH_ERROR', (data) => {

@@ -37,8 +37,6 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [highResImageDataURL, setHighResImageDataURL] = useState<string | null>(null);
   const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
-  const [bluetoothError, setBluetoothError] = useState<string>('');
-  const [printerInfo, setPrinterInfo] = useState<{ name: string; width: number; dpi: number } | null>(null);
 
   // Helper: compose final image (with QR if available) and return dataURL
   const composeImageForPrint = async (): Promise<string | null> => {
@@ -71,18 +69,32 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   
   const [printProgress, setPrintProgress] = useState<{status: string, progress: number} | null>(null);
 
-  // Initialize native bridge
+  // Initialize native bridge and printer instance
   useEffect(() => {
     nativeBridge.init();
     
+    // Create shared printer instance
+    const printerInstance = new HybridBluetoothPrinterService();
+    setBluetoothPrinter(printerInstance);
+    
     // Listen for print progress
-    const handler = (event: any) => {
+    const progressHandler = (event: any) => {
       setPrintProgress(event.detail);
     };
-    window.addEventListener('printProgress', handler);
+    window.addEventListener('printProgress', progressHandler);
+    
+    // Listen for Bluetooth status changes
+    const statusHandler = (event: any) => {
+      setIsBluetoothConnected(event.detail.connected);
+      if (event.detail.connected) {
+        console.log('Bluetooth connected:', event.detail.info);
+      }
+    };
+    window.addEventListener('bluetoothStatusChange', statusHandler);
     
     return () => {
-      window.removeEventListener('printProgress', handler);
+      window.removeEventListener('printProgress', progressHandler);
+      window.removeEventListener('bluetoothStatusChange', statusHandler);
     };
   }, []);
 
@@ -271,92 +283,6 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     }
   };
 
-  const handleShareToPrintApp = async () => {
-    try {
-      const dataURL = await composeImageForPrint();
-      if (!dataURL) return alert('Gambar belum siap untuk dibagikan');
-      if (typeof (navigator as any).share === 'function') {
-        const resp = await fetch(dataURL);
-        const blob = await resp.blob();
-        const file = new File([blob], 'morobooth-58mm.png', { type: 'image/png' });
-        const shareData: any = { files: [file], title: 'Morobooth', text: 'Print via thermal printer' };
-        const canShareFn = (navigator as any).canShare;
-        const canShare = typeof canShareFn === 'function' ? canShareFn.call(navigator, shareData) : false;
-        if (canShare) {
-          await (navigator as any).share(shareData);
-          return;
-        }
-      }
-      await handlePrint();
-    } catch (e) {
-      console.error('Share print error:', e);
-      alert('Gagal membuka aplikasi print. Coba gunakan tombol PRINT.');
-    }
-  };
-
-  // Open ESC POS Print Service app via Android intent (no chooser)
-  const openEscPosApp = () => {
-    try {
-      const pkg = 'com.loopedlabs.escposprintservice';
-      const intentUrl = 'intent:#Intent;scheme=escposprintservice;package=' + pkg + ';end';
-      // Try open the app directly
-      window.location.href = intentUrl;
-      // Fallback: open Play Store if not installed
-      setTimeout(() => {
-        try {
-          window.location.href = 'market://details?id=' + pkg;
-        } catch {}
-      }, 800);
-    } catch (e) {
-      console.error('Open ESC POS app failed', e);
-    }
-  };
-
-  const handleConnectBluetooth = async () => {
-    try {
-      setBluetoothError('');
-      const svc = new HybridBluetoothPrinterService();
-      
-      if (svc.isNativeEnvironment()) {
-        // Native: akan trigger scan & connect
-        await svc.connect();
-        setBluetoothPrinter(svc);
-        setIsBluetoothConnected(true);
-      } else {
-        // Web Bluetooth fallback
-        if (!('bluetooth' in navigator)) {
-          setBluetoothError('Web Bluetooth not supported');
-          alert('Web Bluetooth not supported in this browser');
-          return;
-        }
-        
-        const connected = await svc.connect();
-        if (connected) {
-          setBluetoothPrinter(svc);
-          setIsBluetoothConnected(true);
-          setPrinterInfo(svc.getPrinterInfo());
-          alert(`Connected to ${svc.getPrinterInfo()?.name || 'Printer'}`);
-        } else {
-          setBluetoothError('Failed to connect to printer');
-        }
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
-      setBluetoothError(msg);
-      alert('Bluetooth connect error: ' + msg);
-    }
-  };
-
-  const handleDisconnectBluetooth = async () => {
-    try {
-      await bluetoothPrinter?.disconnect();
-    } finally {
-      setBluetoothPrinter(null);
-      setIsBluetoothConnected(false);
-      setPrinterInfo(null);
-      setBluetoothError('');
-    }
-  };
 
   const handleStateChange = (newState: AppState) => {
     setAppState(newState);
@@ -410,40 +336,13 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         </p>
       </div>
 
-      {/* Bluetooth controls */}
-      <div className="bluetooth-controls">
-        {!isBluetoothConnected ? (
-          <button
-            className="bluetooth-btn"
-            onClick={handleConnectBluetooth}
-            disabled={!('bluetooth' in navigator)}
-          >
-            {('bluetooth' in navigator) ? 'Connect Bluetooth Printer' : 'Bluetooth Not Supported'}
-          </button>
-        ) : (
-          <div className="bluetooth-status">
-            <div className="printer-info">
-              <span>Connected: {printerInfo?.name}</span>
-              {printerInfo && (
-                <span className="printer-specs">{printerInfo.width}px · {printerInfo.dpi} DPI</span>
-              )}
-            </div>
-            <button className="disconnect-btn" onClick={handleDisconnectBluetooth}>Disconnect</button>
-          </div>
-        )}
-        {bluetoothError && <div className="bluetooth-error">{bluetoothError}</div>}
-        {/* Print progress indicator */}
-        {printProgress && (
-          <div className="print-progress">
-            <div className="progress-bar" style={{ width: `${printProgress.progress}%` }} />
-            <span>{printProgress.status}...</span>
-          </div>
-        )}
-        {/* Share/Print helpers */}
-        <button className="bluetooth-btn" onClick={handlePrint}>PRINT (Dialog)</button>
-        <button className="bluetooth-btn" onClick={handleShareToPrintApp}>Share to Print App</button>
-        <button className="bluetooth-btn" onClick={openEscPosApp}>Open ESC POS Print Service</button>
-      </div>
+      {/* Print progress indicator */}
+      {printProgress && (
+        <div className="print-progress">
+          <div className="progress-bar" style={{ width: `${printProgress.progress}%` }} />
+          <span>{printProgress.status}...</span>
+        </div>
+      )}
       
       <div onClick={handleCanvasClick}>
         <PhotoBooth

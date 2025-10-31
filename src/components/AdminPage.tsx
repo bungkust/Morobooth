@@ -17,6 +17,8 @@ import {
   clearConfigCache,
   type ConfigOverride 
 } from '../services/configService';
+import { HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
+import { nativeBridge } from '../services/nativeBridgeService';
 
 export const AdminPage = () => {
   
@@ -41,7 +43,13 @@ export const AdminPage = () => {
   const [configError, setConfigError] = useState('');
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'session' | 'upload' | 'config' | 'history'>('session');
+  const [activeTab, setActiveTab] = useState<'session' | 'upload' | 'config' | 'history' | 'bluetooth'>('session');
+  
+  // Bluetooth states
+  const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
+  const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
+  const [bluetoothError, setBluetoothError] = useState<string>('');
+  const [printerInfo, setPrinterInfo] = useState<any>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -78,6 +86,25 @@ export const AdminPage = () => {
       loadData();
     }
   }, [authenticated, loadData]);
+
+  // Initialize native bridge
+  useEffect(() => {
+    nativeBridge.init();
+    
+    // Listen for Bluetooth status changes
+    const statusHandler = (event: any) => {
+      setIsBluetoothConnected(event.detail.connected);
+      setPrinterInfo(event.detail.info);
+      if (event.detail.connected) {
+        console.log('Bluetooth connected:', event.detail.info);
+      }
+    };
+    window.addEventListener('bluetoothStatusChange', statusHandler);
+    
+    return () => {
+      window.removeEventListener('bluetoothStatusChange', statusHandler);
+    };
+  }, []);
 
   const handleLogin = useCallback(() => {
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -190,6 +217,48 @@ export const AdminPage = () => {
       setUploading(false);
     }
   }
+
+  const handleConnectBluetooth = async () => {
+    try {
+      setBluetoothError('');
+      const svc = new HybridBluetoothPrinterService();
+      setBluetoothPrinter(svc);
+      
+      if (svc.isNativeEnvironment()) {
+        await svc.connect();
+      } else {
+        if (!('bluetooth' in navigator)) {
+          setBluetoothError('Web Bluetooth not supported');
+          alert('Web Bluetooth not supported in this browser');
+          return;
+        }
+        
+        const connected = await svc.connect();
+        if (connected) {
+          setIsBluetoothConnected(true);
+          setPrinterInfo(svc.getPrinterInfo());
+          alert(`Connected to ${svc.getPrinterInfo()?.name || 'Printer'}`);
+        } else {
+          setBluetoothError('Failed to connect to printer');
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      setBluetoothError(msg);
+      alert('Bluetooth connect error: ' + msg);
+    }
+  };
+
+  const handleDisconnectBluetooth = async () => {
+    try {
+      await bluetoothPrinter?.disconnect();
+    } finally {
+      setBluetoothPrinter(null);
+      setIsBluetoothConnected(false);
+      setPrinterInfo(null);
+      setBluetoothError('');
+    }
+  };
 
   if (!authenticated) {
     return (
@@ -453,6 +522,61 @@ export const AdminPage = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'bluetooth' && (
+            <div className="tab-content">
+              <div className="admin-card bluetooth-card">
+                <div className="card-header">
+                  <h2>Bluetooth Printer</h2>
+                  <div className={`status-indicator ${isBluetoothConnected ? 'active' : ''}`}></div>
+                </div>
+                
+                {bluetoothError && <div className="error-message">{bluetoothError}</div>}
+                
+                {!isBluetoothConnected ? (
+                  <div className="bluetooth-not-connected">
+                    <div className="bluetooth-icon">📡</div>
+                    <p className="bluetooth-status-text">Printer not connected</p>
+                    <p className="bluetooth-help-text">
+                      Click the button below to scan for and connect to a Bluetooth printer
+                    </p>
+                    <button 
+                      onClick={handleConnectBluetooth} 
+                      className="primary-btn bluetooth-btn"
+                      disabled={!bluetoothPrinter && !('bluetooth' in navigator)}
+                    >
+                      Connect Bluetooth Printer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bluetooth-connected">
+                    <div className="bluetooth-icon connected">✓</div>
+                    <p className="bluetooth-status-text">Printer connected</p>
+                    {printerInfo && (
+                      <div className="printer-details">
+                        <div className="info-row">
+                          <span className="label">Name:</span>
+                          <span className="value">{printerInfo.name || 'Unknown'}</span>
+                        </div>
+                        {printerInfo.address && (
+                          <div className="info-row">
+                            <span className="label">Address:</span>
+                            <span className="value code">{printerInfo.address}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <button 
+                      onClick={handleDisconnectBluetooth} 
+                      className="danger-btn disconnect-btn"
+                    >
+                      Disconnect
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Navigation */}
@@ -484,6 +608,13 @@ export const AdminPage = () => {
           >
             <span className="nav-icon">📋</span>
             <span className="nav-label">History</span>
+          </button>
+          <button 
+            className={`nav-btn ${activeTab === 'bluetooth' ? 'active' : ''}`}
+            onClick={() => setActiveTab('bluetooth')}
+          >
+            <span className="nav-icon">🖨️</span>
+            <span className="nav-label">Printer</span>
           </button>
         </div>
       </div>

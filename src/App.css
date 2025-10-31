@@ -1467,6 +1467,69 @@ button:disabled {
   margin-top: 8px;
 }
 
+/* Bluetooth Card (Admin) */
+.bluetooth-not-connected,
+.bluetooth-connected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.bluetooth-icon {
+  font-size: 48px;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-white);
+  border: 3px solid var(--c-black);
+  box-shadow: 4px 4px 0 0 var(--c-black);
+  border-radius: 50%;
+}
+
+.bluetooth-icon.connected {
+  background: #28a745;
+  color: var(--c-white);
+  font-size: 40px;
+}
+
+.bluetooth-status-text {
+  font-size: 20px;
+  font-weight: bold;
+  font-family: var(--font-main);
+  margin: 0;
+}
+
+.bluetooth-help-text {
+  font-size: 14px;
+  color: #666;
+  text-align: center;
+  margin: 0;
+  max-width: 300px;
+}
+
+.bluetooth-not-connected .bluetooth-btn,
+.bluetooth-connected .disconnect-btn {
+  width: 100%;
+  max-width: 300px;
+}
+
+.printer-details {
+  width: 100%;
+  max-width: 400px;
+  padding: 16px;
+  background: var(--c-white);
+  border: 2px solid var(--c-black);
+  box-shadow: 2px 2px 0 0 var(--c-black);
+}
+
+.bluetooth-connected .disconnect-btn {
+  max-width: 300px;
+}
+
 /* Config Card */
 .config-preview {
   margin-bottom: 20px;
