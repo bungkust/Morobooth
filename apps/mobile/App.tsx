@@ -148,6 +148,7 @@ function App() {
       
       switch (message.type) {
         case 'SCAN_BLUETOOTH_PRINTERS':
+          console.log('App: SCAN_BLUETOOTH_PRINTERS received, opening modal');
           setShowPrinterModal(true);
           break;
           
