@@ -7,11 +7,11 @@ export class NativeBridgeService {
   private messageHandlers: Map<string, (data: any) => void> = new Map();
 
   isNativeApp(): boolean {
-    return (window as any).isNativeApp === true;
+    return window.isNativeApp === true;
   }
 
   hasNativeBluetooth(): boolean {
-    return (window as any).hasNativeBluetooth === true;
+    return window.hasNativeBluetooth === true;
   }
 
   sendMessage(type: string, data?: any): void {

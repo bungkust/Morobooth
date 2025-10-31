@@ -24,6 +24,9 @@ interface PhotoBoothAppProps {
 }
 
 export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackToTemplate }) => {
+  const photoBoothRef = useRef<PhotoBoothRef>(null);
+  const { requestWakeLock, releaseWakeLock } = useWakeLock();
+  
   const [appState, setAppState] = useState<AppState>('PREVIEW');
   const [countdownText, setCountdownText] = useState('');
   const [, setFrames] = useState<any[]>([]);

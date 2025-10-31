@@ -1,6 +1,5 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
-import { orderedDither } from '../utils/dithering';
 
 export class HybridBluetoothPrinterService {
   private webBluetooth: UniversalBluetoothPrinterService | null = null;
@@ -128,14 +127,14 @@ export class HybridBluetoothPrinterService {
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
         const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
         
-        // Apply dithering (reuse existing orderedDither)
-        const dithered = orderedDither(imageData);
+        // Apply ordered dithering directly to ImageData
+        this.applyOrderedDither(imageData);
         
         // Convert to 1-bit bitmap (0=white, 1=black)
         const bitmap = new Uint8Array(targetWidth * targetHeight);
-        for (let i = 0; i < dithered.data.length; i += 4) {
+        for (let i = 0; i < imageData.data.length; i += 4) {
           const pixelIndex = i / 4;
-          const gray = dithered.data[i]; // R channel (already B&W)
+          const gray = imageData.data[i]; // R channel
           bitmap[pixelIndex] = gray < 128 ? 1 : 0;
         }
         
@@ -164,6 +163,33 @@ export class HybridBluetoothPrinterService {
     }
     
     return result;
+  }
+
+  private applyOrderedDither(imageData: ImageData): void {
+    const M4 = [
+      [0, 8, 2, 10],
+      [12, 4, 14, 6],
+      [3, 11, 1, 9],
+      [15, 7, 13, 5],
+    ];
+    
+    const M = M4;
+    const n = M.length;
+    const n2 = n * n;
+    const scale = 255 / n2;
+    
+    for (let y = 0; y < imageData.height; y++) {
+      for (let x = 0; x < imageData.width; x++) {
+        const idx = (y * imageData.width + x) * 4;
+        const lum = imageData.data[idx];
+        const threshold = M[y % n][x % n] * scale;
+        const v = lum < threshold ? 0 : 255;
+        
+        imageData.data[idx] = v;
+        imageData.data[idx + 1] = v;
+        imageData.data[idx + 2] = v;
+      }
+    }
   }
 
   getPrinterInfo(): any {
