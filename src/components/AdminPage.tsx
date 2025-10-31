@@ -91,6 +91,10 @@ export const AdminPage = () => {
   useEffect(() => {
     nativeBridge.init();
     
+    // Create shared printer instance
+    const printerInstance = new HybridBluetoothPrinterService();
+    setBluetoothPrinter(printerInstance);
+    
     // Listen for Bluetooth status changes
     const statusHandler = (event: any) => {
       setIsBluetoothConnected(event.detail.connected);
@@ -221,11 +225,15 @@ export const AdminPage = () => {
   const handleConnectBluetooth = async () => {
     try {
       setBluetoothError('');
-      const svc = new HybridBluetoothPrinterService();
-      setBluetoothPrinter(svc);
       
-      if (svc.isNativeEnvironment()) {
-        await svc.connect();
+      if (!bluetoothPrinter) {
+        setBluetoothError('Bluetooth service not initialized');
+        return;
+      }
+      
+      if (bluetoothPrinter.isNativeEnvironment()) {
+        await bluetoothPrinter.connect();
+        // State will be updated via bluetoothStatusChange event
       } else {
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
@@ -233,11 +241,11 @@ export const AdminPage = () => {
           return;
         }
         
-        const connected = await svc.connect();
+        const connected = await bluetoothPrinter.connect();
         if (connected) {
           setIsBluetoothConnected(true);
-          setPrinterInfo(svc.getPrinterInfo());
-          alert(`Connected to ${svc.getPrinterInfo()?.name || 'Printer'}`);
+          setPrinterInfo(bluetoothPrinter.getPrinterInfo());
+          alert(`Connected to ${bluetoothPrinter.getPrinterInfo()?.name || 'Printer'}`);
         } else {
           setBluetoothError('Failed to connect to printer');
         }
@@ -543,7 +551,6 @@ export const AdminPage = () => {
                     <button 
                       onClick={handleConnectBluetooth} 
                       className="primary-btn bluetooth-btn"
-                      disabled={!bluetoothPrinter && !('bluetooth' in navigator)}
                     >
                       Connect Bluetooth Printer
                     </button>
