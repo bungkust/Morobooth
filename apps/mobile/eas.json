@@ -1,0 +1,42 @@
+{
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "debug": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_WEBVIEW_URL": "https://morobooth.netlify.app"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_WEBVIEW_URL": "https://staging-morobooth.netlify.app"
+      }
+    },
+    "production": {
+      "distribution": "store",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_WEBVIEW_URL": "https://morobooth.netlify.app",
+        "EXPO_PUBLIC_SENTRY_DSN": "$SENTRY_DSN"
+      }
+    }
+  }
+}
+
+
+

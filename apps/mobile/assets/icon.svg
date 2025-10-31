@@ -1,0 +1,11 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="1024" fill="#000000"/>
+  <text x="512" y="600" font-family="Arial, sans-serif" font-size="200" font-weight="bold" text-anchor="middle" fill="#FFFFFF">MORO</text>
+  <rect x="200" y="200" width="624" height="200" fill="none" stroke="#FFFFFF" stroke-width="20"/>
+  <circle cx="300" cy="300" r="40" fill="#FFFFFF"/>
+  <circle cx="724" cy="300" r="40" fill="#FFFFFF"/>
+  <rect x="350" y="280" width="324" height="40" fill="#FFFFFF"/>
+</svg>
+
+
+

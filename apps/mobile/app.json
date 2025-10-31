@@ -1,0 +1,80 @@
+{
+  "expo": {
+    "name": "Morobooth",
+    "slug": "morobooth",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#000000"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourcompany.morobooth",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Required for photo booth functionality",
+        "NSBluetoothAlwaysUsageDescription": "Required to connect to thermal printer",
+        "NSBluetoothPeripheralUsageDescription": "Required to print photos"
+      }
+    },
+    "android": {
+      "package": "com.bungkust.morobooth",
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_SCAN",
+        "BLUETOOTH_CONNECT",
+        "ACCESS_FINE_LOCATION",
+        "CAMERA",
+        "INTERNET",
+        "WAKE_LOCK"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "data": [
+            {
+              "scheme": "morobooth",
+              "host": "download"
+            },
+            {
+              "scheme": "https",
+              "host": "your-domain.com",
+              "pathPrefix": "/download"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 34,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 23
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "webviewUrl": "https://morobooth.netlify.app",
+      "sentryDsn": "",
+      "eas": {
+        "projectId": "efabbd7b-7d2c-48de-9fd6-03092db248de"
+      }
+    },
+    "owner": "bungkust"
+  }
+}
