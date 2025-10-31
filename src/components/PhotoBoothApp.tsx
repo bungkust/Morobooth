@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { PhotoBooth, type PhotoBoothRef, type AppState } from './PhotoBooth';
 import { Controls } from './Controls';
 import { PreviewModal } from './PreviewModal';
