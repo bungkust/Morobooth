@@ -114,24 +114,30 @@ jobs:
             ls -la app/src/main/assets/ || echo "Assets directory does not exist"
           fi
 
-      - name: Rename and prepare APK
-        working-directory: ./apps/mobile/android/app/build/outputs/apk
+      - name: Rename APK with timestamp
+        working-directory: .
         run: |
-          # Find APK file
+          # Find APK file based on build type
           if [ "${{ inputs.buildType }}" = "release" ]; then
-            APK_FILE=$(find release -name "app-release.apk" | head -1)
+            APK_SOURCE=$(find apps/mobile/android/app/build/outputs/apk/release -name "app-release.apk" | head -1)
           else
-            APK_FILE=$(find debug -name "app-debug.apk" | head -1)
+            APK_SOURCE=$(find apps/mobile/android/app/build/outputs/apk/debug -name "app-debug.apk" | head -1)
           fi
           
-          # Create output directory at repo root level
-          mkdir -p ../../../../../../output
+          if [ -z "$APK_SOURCE" ]; then
+            echo "❌ APK file not found!"
+            exit 1
+          fi
           
-          # Copy and rename APK
-          cp "$APK_FILE" "../../../../../../output/${{ steps.version.outputs.APK_NAME }}.apk"
+          # Create output directory
+          mkdir -p output
           
-          echo "APK renamed to: ${{ steps.version.outputs.APK_NAME }}.apk"
-          ls -lh "../../../../../../output/"
+          # Copy and rename with timestamp
+          cp "$APK_SOURCE" "output/${{ steps.version.outputs.APK_NAME }}.apk"
+          
+          echo "✅ APK renamed to: ${{ steps.version.outputs.APK_NAME }}.apk"
+          echo "📦 APK size:"
+          ls -lh output/
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
