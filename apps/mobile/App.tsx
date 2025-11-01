@@ -531,7 +531,6 @@ function App() {
         style={styles.webview}
       />
       
-      {console.log('App: Rendering - showPrinterModal state:', showPrinterModal)}
       {__DEV__ && (
         <View style={{ position: 'absolute', top: 50, right: 10, zIndex: 9999 }}>
           <TouchableOpacity
