@@ -32,13 +32,11 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="com.bungkust.morobooth"/>
-        <data android:scheme="exp+morobooth"/>
       </intent-filter>
       <intent-filter data-generated="true">
         <action android:name="android.intent.action.VIEW"/>
         <data android:scheme="morobooth" android:host="download"/>
         <data android:scheme="https" android:host="your-domain.com" android:pathPrefix="/download"/>
-        <data android:scheme="exp+morobooth"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <category android:name="android.intent.category.DEFAULT"/>
       </intent-filter>
