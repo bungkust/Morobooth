@@ -144,8 +144,11 @@ export class UniversalBluetoothPrinterService {
       }
       return false;
     } catch (e) {
-      console.error('Bluetooth connect error:', e);
-      return false;
+      const error = e instanceof Error ? e : new Error(String(e));
+      console.error('Bluetooth connect error:', error);
+      console.error('Stack trace:', error.stack);
+      // Re-throw error so it can be caught and displayed in UI
+      throw error;
     }
   }
 

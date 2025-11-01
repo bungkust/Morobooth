@@ -46,8 +46,15 @@ export class HybridBluetoothPrinterService {
     });
 
     nativeBridge.onMessage('BLUETOOTH_ERROR', (data) => {
-      console.error('Native Bluetooth error:', data.error);
-      alert('Bluetooth Error: ' + data.error);
+      const errorMsg = data.error || 'Unknown Bluetooth error';
+      const stackTrace = data.stack || data.stackTrace || 'No stack trace available';
+      
+      console.error('Native Bluetooth error:', errorMsg);
+      console.error('Stack trace:', stackTrace);
+      
+      // Show error popup with message and stack trace
+      const fullErrorText = `${errorMsg}\n\nStack Trace:\n${stackTrace}`;
+      alert(`Bluetooth Error:\n\n${fullErrorText}`);
     });
 
     nativeBridge.onMessage('PRINT_SUCCESS', (data) => {
@@ -77,24 +84,32 @@ export class HybridBluetoothPrinterService {
   }
 
   async connect(address?: string): Promise<boolean> {
-    if (this.isNative) {
-      if (address) {
-        nativeBridge.sendMessage('CONNECT_BLUETOOTH_PRINTER', { deviceId: address });
-        return true;
+    try {
+      if (this.isNative) {
+        if (address) {
+          nativeBridge.sendMessage('CONNECT_BLUETOOTH_PRINTER', { deviceId: address });
+          return true;
+        } else {
+          // Trigger scan first
+          await this.scanPrinters();
+          return false;
+        }
       } else {
-        // Trigger scan first
-        await this.scanPrinters();
-        return false;
+        // Fallback to Web Bluetooth
+        this.webBluetooth = new UniversalBluetoothPrinterService();
+        const connected = await this.webBluetooth.connect();
+        this.isConnected = connected;
+        if (connected) {
+          this.printerInfo = this.webBluetooth.getPrinterInfo();
+        }
+        return connected;
       }
-    } else {
-      // Fallback to Web Bluetooth
-      this.webBluetooth = new UniversalBluetoothPrinterService();
-      const connected = await this.webBluetooth.connect();
-      this.isConnected = connected;
-      if (connected) {
-        this.printerInfo = this.webBluetooth.getPrinterInfo();
-      }
-      return connected;
+    } catch (e) {
+      const error = e instanceof Error ? e : new Error(String(e));
+      console.error('Hybrid Bluetooth connect error:', error);
+      console.error('Stack trace:', error.stack);
+      // Re-throw to allow UI to handle
+      throw error;
     }
   }
 

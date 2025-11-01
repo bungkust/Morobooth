@@ -228,12 +228,19 @@ export const AdminPage = () => {
       
       if (!bluetoothPrinter) {
         setBluetoothError('Bluetooth service not initialized');
+        alert('Bluetooth service not initialized');
         return;
       }
       
       if (bluetoothPrinter.isNativeEnvironment()) {
-        await bluetoothPrinter.connect();
+        const connected = await bluetoothPrinter.connect();
         // State will be updated via bluetoothStatusChange event
+        // If connect returns false, it means scan was triggered but no device selected yet
+        // Wait for user to select device or error event
+        if (!connected) {
+          console.log('Bluetooth scan initiated, waiting for device selection...');
+          // Don't show error yet - wait for BLUETOOTH_ERROR event or BLUETOOTH_CONNECTED event
+        }
       } else {
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
@@ -247,13 +254,26 @@ export const AdminPage = () => {
           setPrinterInfo(bluetoothPrinter.getPrinterInfo());
           alert(`Connected to ${bluetoothPrinter.getPrinterInfo()?.name || 'Printer'}`);
         } else {
-          setBluetoothError('Failed to connect to printer');
+          const errorMsg = 'Failed to connect to printer';
+          setBluetoothError(errorMsg);
+          alert(errorMsg);
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
-      setBluetoothError(msg);
-      alert('Bluetooth connect error: ' + msg);
+      const error = e instanceof Error ? e : new Error(String(e));
+      const errorMsg = error.message || 'Unknown error';
+      const stackTrace = error.stack || 'No stack trace available';
+      
+      // Log full error to console
+      console.error('Bluetooth connect error:', error);
+      console.error('Stack trace:', stackTrace);
+      
+      // Set error state
+      setBluetoothError(errorMsg);
+      
+      // Show error popup with message and stack trace
+      const fullErrorText = `${errorMsg}\n\nStack Trace:\n${stackTrace}`;
+      alert(`Bluetooth Connect Error:\n\n${fullErrorText}`);
     }
   };
 
@@ -293,7 +313,7 @@ export const AdminPage = () => {
         <div className="admin-header">
           <h1>Admin Panel</h1>
           <button onClick={() => window.location.href = '/'} className="back-btn">
-            ← Back to Booth
+            ? Back to Booth
           </button>
         </div>
 
@@ -311,7 +331,7 @@ export const AdminPage = () => {
                        <div className="session-info">
                          <div className="info-row">
                            <span className="label">Status:</span>
-                           <span className="value status-active">🟢 ACTIVE SESSION</span>
+                           <span className="value status-active">?? ACTIVE SESSION</span>
                          </div>
                          <div className="info-row">
                            <span className="label">Event:</span>
@@ -385,9 +405,9 @@ export const AdminPage = () => {
                   </div>
                   <div className="config-status">
                     {isSupabaseConfigured() ? (
-                      <span className="success">✓ Supabase Ready</span>
+                      <span className="success">? Supabase Ready</span>
                     ) : (
-                      <span className="error">✗ Supabase Not Configured</span>
+                      <span className="error">? Supabase Not Configured</span>
                     )}
                   </div>
                 </div>
@@ -407,16 +427,16 @@ export const AdminPage = () => {
                     <h3>Upload Results</h3>
                     <div className="results-summary">
                       <span className="success-count">
-                        ✓ {uploadResults.filter(r => r.success).length} Success
+                        ? {uploadResults.filter(r => r.success).length} Success
                       </span>
                       <span className="error-count">
-                        ✗ {uploadResults.filter(r => !r.success).length} Failed
+                        ? {uploadResults.filter(r => !r.success).length} Failed
                       </span>
                     </div>
                     <div className="results-list">
                       {uploadResults.slice(0, 5).map(r => (
                         <div key={r.photoId} className={`result-item ${r.success ? 'success' : 'error'}`}>
-                          {r.photoId}: {r.success ? '✓' : '✗'}
+                          {r.photoId}: {r.success ? '?' : '?'}
                         </div>
                       ))}
                       {uploadResults.length > 5 && (
@@ -507,7 +527,7 @@ export const AdminPage = () => {
                             <div className="session-header">
                               <div className="session-code">{s.sessionCode}</div>
                               <div className={`session-status ${isActive ? 'active' : 'inactive'}`}>
-                                {isActive ? '🟢 ACTIVE' : '⚪ INACTIVE'}
+                                {isActive ? '?? ACTIVE' : '? INACTIVE'}
                               </div>
                             </div>
                             <div className="session-event">{s.eventName}</div>
@@ -543,7 +563,7 @@ export const AdminPage = () => {
                 
                 {!isBluetoothConnected ? (
                   <div className="bluetooth-not-connected">
-                    <div className="bluetooth-icon">📡</div>
+                    <div className="bluetooth-icon">??</div>
                     <p className="bluetooth-status-text">Printer not connected</p>
                     <p className="bluetooth-help-text">
                       Click the button below to scan for and connect to a Bluetooth printer
@@ -557,7 +577,7 @@ export const AdminPage = () => {
                   </div>
                 ) : (
                   <div className="bluetooth-connected">
-                    <div className="bluetooth-icon connected">✓</div>
+                    <div className="bluetooth-icon connected">?</div>
                     <p className="bluetooth-status-text">Printer connected</p>
                     {printerInfo && (
                       <div className="printer-details">
@@ -592,35 +612,35 @@ export const AdminPage = () => {
             className={`nav-btn ${activeTab === 'session' ? 'active' : ''}`}
             onClick={() => setActiveTab('session')}
           >
-            <span className="nav-icon">📷</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Session</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'upload' ? 'active' : ''}`}
             onClick={() => setActiveTab('upload')}
           >
-            <span className="nav-icon">☁️</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Upload</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
             onClick={() => setActiveTab('config')}
           >
-            <span className="nav-icon">⚙️</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Config</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => setActiveTab('history')}
           >
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">History</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'bluetooth' ? 'active' : ''}`}
             onClick={() => setActiveTab('bluetooth')}
           >
-            <span className="nav-icon">🖨️</span>
+            <span className="nav-icon">???</span>
             <span className="nav-label">Printer</span>
           </button>
         </div>
