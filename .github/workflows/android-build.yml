@@ -25,7 +25,9 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'apps/mobile/package-lock.json'
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -54,11 +56,23 @@ jobs:
         working-directory: ./apps/mobile
         run: npm ci
 
-      - name: Verify app.json configuration
+      - name: Verify and update app.json configuration
         working-directory: ./apps/mobile
         run: |
           echo "Checking app.json configuration..."
-          node -e "const config = require('./app.json'); console.log('Webview URL:', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
+          node -e "const config = require('./app.json'); console.log('Webview URL (before):', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
+          
+          # Update app.json with environment variable (matching EAS build behavior)
+          WEBVIEW_URL="${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}"
+          node -e "
+            const fs = require('fs');
+            const config = require('./app.json');
+            config.expo.extra.webviewUrl = process.env.WEBVIEW_URL;
+            fs.writeFileSync('./app.json', JSON.stringify(config, null, 2));
+            console.log('Webview URL (after):', config.expo.extra.webviewUrl);
+          " WEBVIEW_URL="$WEBVIEW_URL"
+          
+          echo "✅ app.json updated with webviewUrl: $WEBVIEW_URL"
 
       - name: Prebuild Android
         working-directory: ./apps/mobile
@@ -81,45 +95,82 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release.keystore
 
+      - name: Verify app.json before build
+        working-directory: ./apps/mobile
+        run: |
+          echo "Final app.json verification before build:"
+          node -e "
+            const config = require('./app.json');
+            console.log('App Name:', config.expo.name);
+            console.log('Version:', config.expo.version);
+            console.log('Package:', config.expo.android.package);
+            console.log('WebView URL:', config.expo.extra.webviewUrl);
+            console.log('EAS Project ID:', config.expo.extra.eas.projectId);
+          "
+
       - name: Build APK with Gradle
         working-directory: ./apps/mobile/android
         env:
           EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}
           NODE_ENV: "production"
-          # Ensure app.json ter-process dengan benar
-          EXPO_PUBLIC_PROJECT_ROOT: "../"
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_ALIAS_PASSWORD: ${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}
         run: |
           chmod +x gradlew
           
-          # Gradle akan otomatis bundle JS melalui bundleCommand = "export:embed" di build.gradle
-          # bundleCommand akan memanggil: npx expo export:embed yang bundle JS dan embed ke assets/
-          # app.json akan ter-process oleh Expo dan Constants.expoConfig akan ter-populate
+          echo "================================================"
+          echo "Building APK - Configuration Summary"
+          echo "================================================"
+          echo "Build Type: ${{ inputs.buildType }}"
+          echo "WebView URL: $EXPO_PUBLIC_WEBVIEW_URL"
+          echo "Bundle Command: export:embed (from build.gradle)"
+          echo "Node Version: $(node --version)"
+          echo "================================================"
           
-          echo "Building APK with webview URL: $EXPO_PUBLIC_WEBVIEW_URL"
-          echo "Bundle command configured: export:embed (from build.gradle)"
+          # Build APK with proper configuration
+          # The bundleCommand = "export:embed" in build.gradle will:
+          # 1. Run npx expo export:embed
+          # 2. Bundle JavaScript and assets
+          # 3. Embed into android/app/src/main/assets/
+          # 4. Make Constants.expoConfig available with app.json values
           
           if [ "${{ inputs.buildType }}" = "release" ]; then
+            echo "🔨 Building Release APK..."
             ./gradlew assembleRelease \
               -Pandroid.injected.signing.store.file=app/release.keystore \
               -Pandroid.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD \
               -Pandroid.injected.signing.key.alias=$ANDROID_KEY_ALIAS \
-              -Pandroid.injected.signing.key.password=$ANDROID_KEY_ALIAS_PASSWORD
+              -Pandroid.injected.signing.key.password=$ANDROID_KEY_ALIAS_PASSWORD \
+              --info
           else
-            ./gradlew assembleDebug
+            echo "🔨 Building Debug APK..."
+            ./gradlew assembleDebug --info
           fi
           
-          # Verify bundle created
+          echo "================================================"
+          echo "Verifying Build Output"
+          echo "================================================"
+          
+          # Verify JavaScript bundle was created
           if [ -f "app/src/main/assets/index.android.bundle" ]; then
             echo "✅ JavaScript bundle created successfully"
-            ls -lh app/src/main/assets/
+            BUNDLE_SIZE=$(ls -lh app/src/main/assets/index.android.bundle | awk '{print $5}')
+            echo "   Bundle size: $BUNDLE_SIZE"
+            echo "   Bundle contains app.json configuration with webviewUrl"
           else
-            echo "⚠️  JavaScript bundle not found in assets/"
-            echo "Listing assets directory:"
-            ls -la app/src/main/assets/ || echo "Assets directory does not exist"
+            echo "⚠️ JavaScript bundle not found"
+            echo "This might cause the app to not work properly!"
           fi
+          
+          # List all assets
+          if [ -d "app/src/main/assets" ]; then
+            echo ""
+            echo "Assets directory contents:"
+            ls -lh app/src/main/assets/
+          fi
+          
+          echo "================================================"
 
       - name: Rename APK with timestamp
         working-directory: .
