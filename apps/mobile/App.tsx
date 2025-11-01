@@ -350,11 +350,8 @@ function App() {
                     
                     if (bluetoothGranted) {
                       console.log('App: Permission granted, opening modal');
-                      // Small delay to ensure state update happens after Alert dismisses
-                      setTimeout(() => {
-                        console.log('App: Setting showPrinterModal to true');
-                        setShowPrinterModal(true);
-                      }, 300);
+                      // Open modal immediately
+                      setShowPrinterModal(true);
                     } else {
                       console.log('App: Permission not granted after request');
                       Alert.alert(
@@ -386,14 +383,8 @@ function App() {
     
     // Permission already granted or not Android, open modal
     console.log('App: Permission already granted or not Android, opening modal');
-    console.log('App: Current showPrinterModal state before update:', showPrinterModal);
-    
-    // Small delay to ensure state update happens reliably
-    // This helps avoid race conditions with any pending async operations
-    setTimeout(() => {
-      console.log('App: Setting showPrinterModal to true (permission already granted)');
-      setShowPrinterModal(true);
-    }, 100);
+    // Open modal immediately
+    setShowPrinterModal(true);
   };
 
   const handleSelectPrinter = async (device: PrinterDevice) => {
