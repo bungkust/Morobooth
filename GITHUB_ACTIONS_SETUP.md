@@ -134,6 +134,12 @@ morobooth-v{VERSION}-{BUILD_TYPE}-{DATE}-{TIME}.apk
    - Cek Android SDK setup
    - Pastikan Java 17 terinstall
 
+4. **Keystore path error** (FIXED ✅)
+   - Error: `file '.../app/app/release.keystore' which doesn't exist`
+   - Cause: Relative path menyebabkan Gradle salah interpret
+   - Fix: Gunakan absolute path `$(pwd)/app/release.keystore`
+   - Status: ✅ Sudah diperbaiki dengan absolute path + verification
+
 ### APK Tidak Bisa Install
 
 **Check:**
@@ -149,6 +155,48 @@ morobooth-v{VERSION}-{BUILD_TYPE}-{DATE}-{TIME}.apk
 - Pastikan `app.json` extra.webviewUrl sudah set
 - Pastikan JavaScript bundle terbuat (cek build logs)
 - Environment variable `EXPO_PUBLIC_WEBVIEW_URL` harus ter-set
+
+## Perbedaan GitHub Actions vs EAS Cloud Build
+
+### Kesamaan (Setelah Update)
+
+✅ **Konfigurasi yang Sama:**
+- WebView URL diinjeksi dari input/environment variable
+- Node.js version 20 (sama dengan EAS)
+- Bundle command menggunakan `expo export:embed`
+- app.json diupdate sebelum prebuild (matching EAS behavior)
+- JavaScript bundle di-embed ke APK assets
+
+### Cara Kerja Build Process
+
+**EAS Cloud Build:**
+1. Baca environment variables dari `eas.json`
+2. Update app.json dengan env vars
+3. Run `eas build` yang handle semua proses
+4. Bundle JS dan assets otomatis
+5. Build APK dengan konfigurasi yang benar
+
+**GitHub Actions Build (Updated):**
+1. Baca input parameters dari workflow
+2. **Update app.json dengan webviewUrl** (matching EAS)
+3. Run `expo prebuild` untuk generate Android project
+4. Build dengan Gradle (bundleCommand akan jalankan `expo export:embed`)
+5. Verify bundle berhasil dibuat
+
+### Key Fixes Applied
+
+1. ✅ **app.json Update**: WebView URL sekarang diinjeksi ke app.json sebelum prebuild (sama seperti EAS)
+2. ✅ **Node.js Version**: Update ke Node 20 (sama dengan EAS latest)
+3. ✅ **Build Verification**: Tambah logging untuk verify bundle berhasil dibuat
+4. ✅ **Constants.expoConfig**: Sekarang baca dari app.json yang sudah diupdate
+
+### Hasil Build Sekarang Identik
+
+Dengan perubahan ini, APK dari GitHub Actions akan:
+- Load WebView URL yang sama dengan EAS build
+- Punya konfigurasi app.json yang identik
+- Bundle size yang sama
+- Behavior yang sama persis dengan EAS cloud build
 
 ## Build Time
 
