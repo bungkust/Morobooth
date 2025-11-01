@@ -39,18 +39,24 @@ export const PrinterSelectionModal: React.FC<Props> = ({
   const [connectingDevice, setConnectingDevice] = useState<PrinterDevice | null>(null);
 
   useEffect(() => {
+    console.log('PrinterSelectionModal: isVisible changed to:', isVisible);
     if (isVisible) {
+      console.log('PrinterSelectionModal: Modal is visible, initializing...');
       // Check if already connected
       if (connectedDevice) {
+        console.log('PrinterSelectionModal: Already connected to:', connectedDevice.name);
         setState('connected');
         setError(null);
       } else {
+        console.log('PrinterSelectionModal: Not connected, starting scan...');
         // Reset state and start scanning
         setDevices([]);
         setError(null);
         setState('scanning');
         handleScan();
       }
+    } else {
+      console.log('PrinterSelectionModal: Modal is hidden');
     }
   }, [isVisible, connectedDevice]);
 
@@ -299,14 +305,26 @@ export const PrinterSelectionModal: React.FC<Props> = ({
     }
   };
 
+  console.log('PrinterSelectionModal: Rendering modal with isVisible=', isVisible);
+  console.log('PrinterSelectionModal: Modal component is being rendered');
+
+  // Always render Modal component - let react-native-modal handle visibility
   return (
     <Modal 
       isVisible={isVisible} 
       onBackdropPress={state !== 'connecting' ? onClose : undefined}
       backdropColor="rgba(0, 0, 0, 0.5)"
+      backdropOpacity={0.5}
       animationIn="slideInUp"
       animationOut="slideOutDown"
       onBackButtonPress={state !== 'connecting' ? onClose : undefined}
+      useNativeDriver={false}
+      hideModalContentWhileAnimating={false}
+      statusBarTranslucent={true}
+      avoidKeyboard={false}
+      onModalShow={() => console.log('PrinterSelectionModal: onModalShow called - modal is now visible!')}
+      onModalWillShow={() => console.log('PrinterSelectionModal: onModalWillShow called - modal is about to show!')}
+      onModalHide={() => console.log('PrinterSelectionModal: onModalHide called')}
     >
       <View style={styles.container}>
         <Text style={styles.title}>
