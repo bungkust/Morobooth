@@ -95,6 +95,13 @@ export class UniversalBluetoothPrinterService {
 
   async connect(): Promise<boolean> {
     try {
+      console.log('UniversalBluetoothPrinterService.connect() called');
+      
+      if (!navigator.bluetooth) {
+        console.error('navigator.bluetooth is not available');
+        throw new Error('Web Bluetooth API is not available');
+      }
+      
       const filters: any[] = [];
       Object.keys(UniversalBluetoothPrinterService.PRINTER_CONFIGS).forEach((name) => {
         filters.push({ name });
@@ -109,6 +116,7 @@ export class UniversalBluetoothPrinterService {
         { namePrefix: 'Thermal' }
       );
 
+      console.log('Calling navigator.bluetooth.requestDevice with filters:', filters);
       this.device = await navigator.bluetooth.requestDevice({
         filters,
         optionalServices: [
@@ -117,6 +125,8 @@ export class UniversalBluetoothPrinterService {
           '0000ffe0-0000-1000-8000-00805f9b34fb'  // Generic
         ]
       });
+      
+      console.log('Device selected:', this.device?.name);
 
       const detectedName = this.device.name || 'Generic 58mm';
       this.config = this.detectPrinterConfig(detectedName);

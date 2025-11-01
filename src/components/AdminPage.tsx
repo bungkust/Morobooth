@@ -224,6 +224,7 @@ export const AdminPage = () => {
 
   const handleConnectBluetooth = async () => {
     try {
+      console.log('handleConnectBluetooth called');
       setBluetoothError('');
       
       if (!bluetoothPrinter) {
@@ -232,28 +233,47 @@ export const AdminPage = () => {
       }
       
       if (bluetoothPrinter.isNativeEnvironment()) {
+        console.log('Using native Bluetooth');
         await bluetoothPrinter.connect();
         // State will be updated via bluetoothStatusChange event
       } else {
+        console.log('Using Web Bluetooth API');
+        
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
           alert('Web Bluetooth not supported in this browser');
           return;
         }
         
+        console.log('Calling bluetoothPrinter.connect()...');
         const connected = await bluetoothPrinter.connect();
+        console.log('Connection result:', connected);
+        
         if (connected) {
           setIsBluetoothConnected(true);
-          setPrinterInfo(bluetoothPrinter.getPrinterInfo());
-          alert(`Connected to ${bluetoothPrinter.getPrinterInfo()?.name || 'Printer'}`);
+          const info = bluetoothPrinter.getPrinterInfo();
+          setPrinterInfo(info);
+          console.log('Connected to printer:', info);
+          alert(`Connected to ${info?.name || 'Printer'}`);
         } else {
-          setBluetoothError('Failed to connect to printer');
+          const errorMsg = 'Failed to connect to printer. User may have cancelled or no device found.';
+          setBluetoothError(errorMsg);
+          console.warn(errorMsg);
         }
       }
     } catch (e) {
+      console.error('Bluetooth connect error:', e);
       const msg = e instanceof Error ? e.message : 'Unknown error';
       setBluetoothError(msg);
-      alert('Bluetooth connect error: ' + msg);
+      
+      // More specific error messages
+      if (msg.includes('User cancelled')) {
+        alert('Connection cancelled by user');
+      } else if (msg.includes('HTTPS')) {
+        alert('Bluetooth requires HTTPS connection. Please use https:// or localhost');
+      } else {
+        alert('Bluetooth connect error: ' + msg);
+      }
     }
   };
 
@@ -293,7 +313,7 @@ export const AdminPage = () => {
         <div className="admin-header">
           <h1>Admin Panel</h1>
           <button onClick={() => window.location.href = '/'} className="back-btn">
-            ← Back to Booth
+            ? Back to Booth
           </button>
         </div>
 
@@ -311,7 +331,7 @@ export const AdminPage = () => {
                        <div className="session-info">
                          <div className="info-row">
                            <span className="label">Status:</span>
-                           <span className="value status-active">🟢 ACTIVE SESSION</span>
+                           <span className="value status-active">?? ACTIVE SESSION</span>
                          </div>
                          <div className="info-row">
                            <span className="label">Event:</span>
@@ -385,9 +405,9 @@ export const AdminPage = () => {
                   </div>
                   <div className="config-status">
                     {isSupabaseConfigured() ? (
-                      <span className="success">✓ Supabase Ready</span>
+                      <span className="success">? Supabase Ready</span>
                     ) : (
-                      <span className="error">✗ Supabase Not Configured</span>
+                      <span className="error">? Supabase Not Configured</span>
                     )}
                   </div>
                 </div>
@@ -407,16 +427,16 @@ export const AdminPage = () => {
                     <h3>Upload Results</h3>
                     <div className="results-summary">
                       <span className="success-count">
-                        ✓ {uploadResults.filter(r => r.success).length} Success
+                        ? {uploadResults.filter(r => r.success).length} Success
                       </span>
                       <span className="error-count">
-                        ✗ {uploadResults.filter(r => !r.success).length} Failed
+                        ? {uploadResults.filter(r => !r.success).length} Failed
                       </span>
                     </div>
                     <div className="results-list">
                       {uploadResults.slice(0, 5).map(r => (
                         <div key={r.photoId} className={`result-item ${r.success ? 'success' : 'error'}`}>
-                          {r.photoId}: {r.success ? '✓' : '✗'}
+                          {r.photoId}: {r.success ? '?' : '?'}
                         </div>
                       ))}
                       {uploadResults.length > 5 && (
@@ -507,7 +527,7 @@ export const AdminPage = () => {
                             <div className="session-header">
                               <div className="session-code">{s.sessionCode}</div>
                               <div className={`session-status ${isActive ? 'active' : 'inactive'}`}>
-                                {isActive ? '🟢 ACTIVE' : '⚪ INACTIVE'}
+                                {isActive ? '?? ACTIVE' : '? INACTIVE'}
                               </div>
                             </div>
                             <div className="session-event">{s.eventName}</div>
@@ -543,7 +563,7 @@ export const AdminPage = () => {
                 
                 {!isBluetoothConnected ? (
                   <div className="bluetooth-not-connected">
-                    <div className="bluetooth-icon">📡</div>
+                    <div className="bluetooth-icon">??</div>
                     <p className="bluetooth-status-text">Printer not connected</p>
                     <p className="bluetooth-help-text">
                       Click the button below to scan for and connect to a Bluetooth printer
@@ -557,7 +577,7 @@ export const AdminPage = () => {
                   </div>
                 ) : (
                   <div className="bluetooth-connected">
-                    <div className="bluetooth-icon connected">✓</div>
+                    <div className="bluetooth-icon connected">?</div>
                     <p className="bluetooth-status-text">Printer connected</p>
                     {printerInfo && (
                       <div className="printer-details">
@@ -592,35 +612,35 @@ export const AdminPage = () => {
             className={`nav-btn ${activeTab === 'session' ? 'active' : ''}`}
             onClick={() => setActiveTab('session')}
           >
-            <span className="nav-icon">📷</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Session</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'upload' ? 'active' : ''}`}
             onClick={() => setActiveTab('upload')}
           >
-            <span className="nav-icon">☁️</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Upload</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'config' ? 'active' : ''}`}
             onClick={() => setActiveTab('config')}
           >
-            <span className="nav-icon">⚙️</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">Config</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
             onClick={() => setActiveTab('history')}
           >
-            <span className="nav-icon">📋</span>
+            <span className="nav-icon">??</span>
             <span className="nav-label">History</span>
           </button>
           <button 
             className={`nav-btn ${activeTab === 'bluetooth' ? 'active' : ''}`}
             onClick={() => setActiveTab('bluetooth')}
           >
-            <span className="nav-icon">🖨️</span>
+            <span className="nav-icon">???</span>
             <span className="nav-label">Printer</span>
           </button>
         </div>

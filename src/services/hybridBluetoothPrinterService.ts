@@ -77,22 +77,30 @@ export class HybridBluetoothPrinterService {
   }
 
   async connect(address?: string): Promise<boolean> {
+    console.log('HybridBluetoothPrinterService.connect() called, isNative:', this.isNative, 'address:', address);
+    
     if (this.isNative) {
       if (address) {
+        console.log('Connecting to native Bluetooth with address:', address);
         nativeBridge.sendMessage('CONNECT_BLUETOOTH_PRINTER', { deviceId: address });
         return true;
       } else {
         // Trigger scan first
+        console.log('No address provided, scanning for printers...');
         await this.scanPrinters();
         return false;
       }
     } else {
       // Fallback to Web Bluetooth
+      console.log('Using Web Bluetooth, creating UniversalBluetoothPrinterService...');
       this.webBluetooth = new UniversalBluetoothPrinterService();
+      console.log('Calling webBluetooth.connect()...');
       const connected = await this.webBluetooth.connect();
+      console.log('webBluetooth.connect() returned:', connected);
       this.isConnected = connected;
       if (connected) {
         this.printerInfo = this.webBluetooth.getPrinterInfo();
+        console.log('Printer info:', this.printerInfo);
       }
       return connected;
     }
