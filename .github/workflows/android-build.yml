@@ -4,15 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       buildType:
-        description: 'Build type'
+        description: 'Build type (matches eas.json profiles)'
         required: true
         default: 'debug'
         type: choice
-        options: [debug, release]
+        options: [debug, preview, production]
       webviewUrl:
-        description: 'WebView URL (optional, default from app.json)'
+        description: 'WebView URL (optional, overrides eas.json env)'
         required: false
-        default: 'https://morobooth.netlify.app'
         type: string
 
 jobs:
@@ -26,15 +25,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Get version info
         id: version
@@ -54,97 +44,146 @@ jobs:
         working-directory: ./apps/mobile
         run: npm ci
 
-      - name: Verify app.json configuration
+      - name: Install EAS CLI
+        run: npm install -g eas-cli@latest
+
+      - name: Authenticate with Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "❌ EXPO_TOKEN secret is not set!"
+            echo "Please set EXPO_TOKEN in GitHub Secrets:"
+            echo "https://github.com/${{ github.repository }}/settings/secrets/actions"
+            echo ""
+            echo "To get your token:"
+            echo "1. Go to https://expo.dev/accounts/[your-account]/settings/access-tokens"
+            echo "2. Create a new token"
+            echo "3. Add it as EXPO_TOKEN secret in GitHub"
+            exit 1
+          fi
+          eas whoami || eas login --non-interactive
+
+      - name: Verify EAS configuration
         working-directory: ./apps/mobile
         run: |
+          echo "Checking eas.json configuration..."
+          cat eas.json
+          echo ""
           echo "Checking app.json configuration..."
-          node -e "const config = require('./app.json'); console.log('Webview URL:', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
+          node -e "const config = require('./app.json'); console.log('Version:', config.expo.version); console.log('Package:', config.expo.android?.package);"
 
-      - name: Prebuild Android
+      - name: Build APK with EAS (Expo Cloud)
+        id: eas_build
         working-directory: ./apps/mobile
         env:
-          EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || '' }}
         run: |
-          npx expo prebuild --platform android --clean
+          # Map buildType input to EAS profile
+          PROFILE="${{ inputs.buildType }}"
           
-      - name: Ensure assets directory exists
+          # Build with EAS on Expo Cloud - ensures 100% match with Expo Cloud builds
+          # This uses the exact same build infrastructure as direct Expo Cloud builds
+          echo "🚀 Building APK with EAS profile: $PROFILE on Expo Cloud"
+          echo "This ensures the build matches exactly with Expo Cloud builds"
+          
+          # Prepare environment variables
+          BUILD_ENV_ARGS=""
+          if [ -n "$EXPO_PUBLIC_WEBVIEW_URL" ]; then
+            BUILD_ENV_ARGS="--env EXPO_PUBLIC_WEBVIEW_URL=$EXPO_PUBLIC_WEBVIEW_URL"
+            echo "Override WebView URL: $EXPO_PUBLIC_WEBVIEW_URL"
+          fi
+          
+          # Run EAS build on Expo Cloud (same as direct cloud builds)
+          # Use --wait to wait for build completion
+          # Use --json to get build information
+          BUILD_OUTPUT=$(eas build --platform android \
+            --profile "$PROFILE" \
+            $BUILD_ENV_ARGS \
+            --non-interactive \
+            --wait \
+            --json 2>&1)
+          
+          # Extract build ID and URL from output
+          BUILD_ID=$(echo "$BUILD_OUTPUT" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+          BUILD_URL=$(echo "$BUILD_OUTPUT" | grep -o '"buildUrl":"[^"]*"' | head -1 | cut -d'"' -f4)
+          
+          if [ -z "$BUILD_ID" ] && [ -z "$BUILD_URL" ]; then
+            # Try parsing JSON output directly
+            echo "$BUILD_OUTPUT" | tail -1 > /tmp/eas_build_output.json
+            BUILD_ID=$(node -e "const data = require('/tmp/eas_build_output.json'); console.log(data.id || '');" 2>/dev/null)
+            BUILD_URL=$(node -e "const data = require('/tmp/eas_build_output.json'); console.log(data.artifacts?.buildUrl || '');" 2>/dev/null)
+          fi
+          
+          if [ -n "$BUILD_ID" ]; then
+            echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+            echo "✅ Build completed with ID: $BUILD_ID"
+          fi
+          
+          if [ -n "$BUILD_URL" ]; then
+            echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
+            echo "✅ Build URL: $BUILD_URL"
+          else
+            echo "⚠️  Build URL not found in output, will query EAS API"
+          fi
+
+      - name: Download APK from EAS
         working-directory: ./apps/mobile
-        run: |
-          mkdir -p android/app/src/main/assets
-          echo "Assets directory ready for bundle"
-
-      - name: Prepare keystore (release only)
-        if: ${{ inputs.buildType == 'release' }}
-        working-directory: ./apps/mobile/android
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release.keystore
-
-      - name: Build APK with Gradle
-        working-directory: ./apps/mobile/android
-        env:
-          EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}
-          NODE_ENV: "production"
-          # Ensure app.json ter-process dengan benar
-          EXPO_PUBLIC_PROJECT_ROOT: "../"
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_ALIAS_PASSWORD: ${{ secrets.ANDROID_KEY_ALIAS_PASSWORD }}
-        run: |
-          chmod +x gradlew
+          PROFILE="${{ inputs.buildType }}"
           
-          # Gradle akan otomatis bundle JS melalui bundleCommand = "export:embed" di build.gradle
-          # bundleCommand akan memanggil: npx expo export:embed yang bundle JS dan embed ke assets/
-          # app.json akan ter-process oleh Expo dan Constants.expoConfig akan ter-populate
+          echo "📥 Downloading APK from Expo Cloud..."
           
-          echo "Building APK with webview URL: $EXPO_PUBLIC_WEBVIEW_URL"
-          echo "Bundle command configured: export:embed (from build.gradle)"
-          
-          if [ "${{ inputs.buildType }}" = "release" ]; then
-            ./gradlew assembleRelease \
-              -Pandroid.injected.signing.store.file=app/release.keystore \
-              -Pandroid.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD \
-              -Pandroid.injected.signing.key.alias=$ANDROID_KEY_ALIAS \
-              -Pandroid.injected.signing.key.password=$ANDROID_KEY_ALIAS_PASSWORD
+          # Try to use build URL from previous step
+          if [ -n "${{ steps.eas_build.outputs.build_url }}" ]; then
+            BUILD_URL="${{ steps.eas_build.outputs.build_url }}"
+            echo "Using build URL from build output"
+          elif [ -n "${{ steps.eas_build.outputs.build_id }}" ]; then
+            # Query build by ID
+            BUILD_ID="${{ steps.eas_build.outputs.build_id }}"
+            BUILD_URL=$(eas build:view "$BUILD_ID" --json --non-interactive | node -e "
+              const data = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+              console.log(data.artifacts?.buildUrl || '');
+            ")
           else
-            ./gradlew assembleDebug
+            # Fallback: get latest build for this profile
+            BUILD_URL=$(eas build:list --platform android --profile "$PROFILE" --limit 1 --non-interactive --json | node -e "
+              const data = JSON.parse(require('fs').readFileSync(0, 'utf-8'));
+              if (data.length > 0 && data[0].artifacts && data[0].artifacts.buildUrl) {
+                console.log(data[0].artifacts.buildUrl);
+              } else {
+                console.error('Build URL not found');
+                process.exit(1);
+              }
+            ")
           fi
           
-          # Verify bundle created
-          if [ -f "app/src/main/assets/index.android.bundle" ]; then
-            echo "✅ JavaScript bundle created successfully"
-            ls -lh app/src/main/assets/
-          else
-            echo "⚠️  JavaScript bundle not found in assets/"
-            echo "Listing assets directory:"
-            ls -la app/src/main/assets/ || echo "Assets directory does not exist"
-          fi
-
-      - name: Rename APK with timestamp
-        working-directory: .
-        run: |
-          # Find APK file based on build type
-          if [ "${{ inputs.buildType }}" = "release" ]; then
-            APK_SOURCE=$(find apps/mobile/android/app/build/outputs/apk/release -name "app-release.apk" | head -1)
-          else
-            APK_SOURCE=$(find apps/mobile/android/app/build/outputs/apk/debug -name "app-debug.apk" | head -1)
-          fi
-          
-          if [ -z "$APK_SOURCE" ]; then
-            echo "❌ APK file not found!"
+          if [ -z "$BUILD_URL" ]; then
+            echo "❌ Could not get build URL"
+            echo "Build may still be processing. Check EAS dashboard:"
+            echo "https://expo.dev/accounts/$EXPO_ACCOUNT_NAME/projects/$EXPO_PROJECT_NAME/builds"
             exit 1
           fi
           
+          echo "Download URL: $BUILD_URL"
+          
           # Create output directory
-          mkdir -p output
+          mkdir -p ../../output
           
-          # Copy and rename with timestamp
-          cp "$APK_SOURCE" "output/${{ steps.version.outputs.APK_NAME }}.apk"
+          # Download APK
+          curl -L "$BUILD_URL" -o "../../output/${{ steps.version.outputs.APK_NAME }}.apk"
           
-          echo "✅ APK renamed to: ${{ steps.version.outputs.APK_NAME }}.apk"
-          echo "📦 APK size:"
-          ls -lh output/
+          if [ ! -f "../../output/${{ steps.version.outputs.APK_NAME }}.apk" ]; then
+            echo "❌ Failed to download APK"
+            exit 1
+          fi
+          
+          echo "✅ APK downloaded"
+          echo "📦 APK details:"
+          ls -lh "../../output/${{ steps.version.outputs.APK_NAME }}.apk"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
