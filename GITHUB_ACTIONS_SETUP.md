@@ -71,11 +71,13 @@ Saat trigger workflow, Anda bisa set:
   - Tidak perlu secrets
   - Untuk testing dan development
   - APK tidak signed (pakai debug keystore)
+  - **Perlu Metro dev server** supaya app bisa jalan (`npx expo start --android`). Kalau diinstal tanpa dev server (mis. download artifact GitHub), app akan menampilkan error *"Could not connect to development server"* seperti di screenshot.
 
 - **Release**: 
   - Butuh semua 4 secrets
   - Untuk production/distribution
   - APK signed dengan release keystore
+  - Sudah meng-embed JavaScript bundle, jadi bisa langsung jalan tanpa dev server
 
 ## Cara Menggunakan
 
@@ -149,12 +151,12 @@ morobooth-v{VERSION}-{BUILD_TYPE}-{DATE}-{TIME}.apk
 
 ### APK Menampilkan "Development Build"
 
-**Issue:** APK mencari dev server, tidak langsung load WebView
+**Issue:** APK mencari dev server, tidak langsung load WebView (biasanya karena artefak yang diinstal adalah build `debug`).
 
 **Fix:** 
-- Pastikan `app.json` extra.webviewUrl sudah set
-- Pastikan JavaScript bundle terbuat (cek build logs)
-- Environment variable `EXPO_PUBLIC_WEBVIEW_URL` harus ter-set
+- Gunakan build `release` kalau Anda butuh APK yang siap pakai tanpa dev server.
+- Kalau tetap ingin pakai build `debug`, jalankan Metro dengan `npx expo start --android` dan pastikan perangkat/ emulator terhubung ke mesin yang menjalankan Metro.
+- Pastikan `app.json` extra.webviewUrl sudah set, JavaScript bundle sukses dibuat (cek build logs), dan environment variable `EXPO_PUBLIC_WEBVIEW_URL` diset saat build.
 
 ## Perbedaan GitHub Actions vs EAS Cloud Build
 
