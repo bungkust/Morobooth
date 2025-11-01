@@ -20,8 +20,6 @@ export class NativeBLEPrinter {
   
   private listeners: any[] = [];
 
-  private isReconnecting: boolean = false;
-
   async init(): Promise<void> {
     await BleManager.start({ showAlert: false });
     
@@ -83,7 +81,7 @@ export class NativeBLEPrinter {
       // Add timeout to prevent hanging
       const connectPromise = BleManager.connect(deviceId);
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 10000)
+        setTimeout(() => reject(new Error('Connection timeout after 10 seconds. Make sure the printer is turned on and nearby.')), 10000)
       );
       
       await Promise.race([connectPromise, timeoutPromise]);
@@ -92,7 +90,7 @@ export class NativeBLEPrinter {
       const peripheralInfo = await BleManager.retrieveServices(deviceId);
       
       if (!peripheralInfo.services || peripheralInfo.services.length === 0) {
-        throw new Error('No services found');
+        throw new Error('No services found on the device. This might not be a printer.');
       }
       
       // Dynamic UUID discovery
@@ -134,7 +132,7 @@ export class NativeBLEPrinter {
         }
       }
       
-      throw new Error('No writable characteristic found');
+      throw new Error('No writable characteristic found. The device does not support printing.');
     } catch (error) {
       console.error('Connect error:', error);
       // Make sure to disconnect on failure
@@ -143,7 +141,8 @@ export class NativeBLEPrinter {
       } catch (e) {
         // Ignore disconnect errors
       }
-      return false;
+      // Re-throw the error instead of returning false so we get proper error messages
+      throw error;
     }
   }
 

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text } from 'react-native';
+import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text, ActivityIndicator, Modal, TouchableOpacity, Clipboard, ScrollView } from 'react-native';
 import WebView from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import * as KeepAwake from 'expo-keep-awake';
@@ -28,6 +28,8 @@ function App() {
   const [showPrinterModal, setShowPrinterModal] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(WEBVIEW_URL);
   const [isOnline, setIsOnline] = useState(true);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState<{ message: string; stack?: string } | null>(null);
 
   useEffect(() => {
     initializeApp();
@@ -197,34 +199,46 @@ function App() {
   };
 
   const handleConnectPrinter = async (deviceId: string) => {
+    setIsConnecting(true);
+    setConnectionError(null);
+    
     try {
       console.log('App: Attempting to connect to printer:', deviceId);
-      const connected = await printer.connect(deviceId);
-      if (connected) {
-        const device: PrinterDevice = { id: deviceId, name: 'Printer' };
-        setConnectedDevice(device);
-        
-        // Save for auto-reconnect
-        await PrinterStorage.saveLastPrinter(device);
-        
-        sendMessageToWebView({
-          type: 'BLUETOOTH_CONNECTED',
-          data: { connected: true, device }
-        });
-        
-        Alert.alert('Success', 'Printer connected!');
-      } else {
-        throw new Error('Connection failed - printer returned false');
-      }
+      await printer.connect(deviceId);
+      
+      // If we get here without an error being thrown, connection succeeded
+      const device: PrinterDevice = { id: deviceId, name: 'Printer' };
+      setConnectedDevice(device);
+      
+      // Save for auto-reconnect
+      await PrinterStorage.saveLastPrinter(device);
+      
+      sendMessageToWebView({
+        type: 'BLUETOOTH_CONNECTED',
+        data: { connected: true, device }
+      });
+      
+      setIsConnecting(false);
+      Alert.alert('Success', 'Printer connected!');
     } catch (error) {
       console.error('App: Connection error:', error);
       Sentry.captureException(error);
+      
       const errorMsg = error instanceof Error ? error.message : 'Failed to connect to printer';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      
+      // Set error state for detailed popup
+      setConnectionError({
+        message: errorMsg,
+        stack: errorStack
+      });
+      
       sendMessageToWebView({
         type: 'BLUETOOTH_ERROR',
-        data: { error: errorMsg }
+        data: { error: errorMsg, stack: errorStack }
       });
-      Alert.alert('Error', `Failed to connect: ${errorMsg}`);
+      
+      setIsConnecting(false);
     }
   };
 
@@ -323,6 +337,64 @@ function App() {
           <Text style={styles.offlineText}>No Internet Connection</Text>
         </View>
       )}
+      
+      {/* Connection Loading Modal */}
+      <Modal
+        visible={isConnecting}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#007bff" />
+            <Text style={styles.loadingText}>Connecting to printer...</Text>
+            <Text style={styles.loadingSubtext}>This may take up to 10 seconds</Text>
+          </View>
+        </View>
+      </Modal>
+      
+      {/* Error Modal with Stack Trace */}
+      <Modal
+        visible={!!connectionError}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.errorOverlay}>
+          <View style={styles.errorModal}>
+            <Text style={styles.errorTitle}>Connection Failed</Text>
+            <Text style={styles.errorMessage}>{connectionError?.message}</Text>
+            
+            {connectionError?.stack && (
+              <ScrollView style={styles.stackContainer}>
+                <Text style={styles.stackLabel}>Stack Trace (for debugging):</Text>
+                <Text style={styles.stackText} selectable={true}>
+                  {connectionError.stack}
+                </Text>
+              </ScrollView>
+            )}
+            
+            <View style={styles.errorButtons}>
+              <TouchableOpacity 
+                style={styles.copyButton}
+                onPress={async () => {
+                  const errorText = `${connectionError?.message}\n\nStack:\n${connectionError?.stack || 'No stack trace'}`;
+                  Clipboard.setString(errorText);
+                  Alert.alert('Copied', 'Error details copied to clipboard');
+                }}
+              >
+                <Text style={styles.copyButtonText}>?? Copy Error</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={styles.closeErrorButton}
+                onPress={() => setConnectionError(null)}
+              >
+                <Text style={styles.closeErrorButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -344,6 +416,99 @@ const styles = StyleSheet.create({
   offlineText: {
     color: 'white',
     fontWeight: 'bold',
+  },
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 30,
+    alignItems: 'center',
+    minWidth: 250,
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  loadingSubtext: {
+    marginTop: 5,
+    fontSize: 12,
+    color: '#666',
+  },
+  errorOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorModal: {
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    maxWidth: '90%',
+    maxHeight: '80%',
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#dc3545',
+    marginBottom: 10,
+  },
+  errorMessage: {
+    fontSize: 16,
+    color: '#333',
+    marginBottom: 15,
+  },
+  stackContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 5,
+    padding: 10,
+    marginBottom: 15,
+    maxHeight: 300,
+  },
+  stackLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 5,
+  },
+  stackText: {
+    fontSize: 11,
+    fontFamily: 'monospace',
+    color: '#333',
+  },
+  errorButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  copyButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  copyButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
+  closeErrorButton: {
+    flex: 1,
+    backgroundColor: '#6c757d',
+    padding: 12,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  closeErrorButtonText: {
+    color: 'white',
+    fontWeight: '600',
   },
 });
 
