@@ -60,21 +60,8 @@ export const PrinterSelectionModal: React.FC<Props> = ({
     setError(null);
     
     try {
-      console.log('Modal: Requesting permissions...');
-      const hasPermission = await printer.requestPermissions();
-      
-      if (!hasPermission) {
-        const errorMsg = 'Bluetooth permissions required';
-        console.log('Modal: Permissions not granted');
-        setError({
-          message: errorMsg,
-          fullError: `❌ Permission Error\n\n${errorMsg}\n\n✅ How to fix:\n1. Open Android Settings\n2. Go to Apps → Morobooth\n3. Tap Permissions\n4. Enable Bluetooth and Location\n5. Come back and tap Retry`
-        });
-        setState('error');
-        return;
-      }
-      
-      console.log('Modal: Permissions granted, scanning devices...');
+      // Permission is already handled in App.tsx before opening this modal
+      console.log('Modal: Scanning for paired devices...');
       const foundDevices = await printer.scanDevices();
       console.log('Modal: Scan complete. Found devices:', foundDevices.length);
       
