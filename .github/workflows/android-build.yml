@@ -108,7 +108,25 @@ jobs:
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
+          echo "================================================"
+          echo "Preparing Release Keystore"
+          echo "================================================"
+          
+          # Decode and save keystore
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > app/release.keystore
+          
+          # Verify keystore was created
+          if [ -f "app/release.keystore" ]; then
+            KEYSTORE_SIZE=$(ls -lh app/release.keystore | awk '{print $5}')
+            echo "✅ Keystore created successfully"
+            echo "   Location: $(pwd)/app/release.keystore"
+            echo "   Size: $KEYSTORE_SIZE"
+          else
+            echo "❌ Keystore creation failed!"
+            exit 1
+          fi
+          
+          echo "================================================"
 
       - name: Verify app.json before build
         working-directory: ./apps/mobile
@@ -152,11 +170,26 @@ jobs:
           
           if [ "${{ inputs.buildType }}" = "release" ]; then
             echo "🔨 Building Release APK..."
+            
+            # Use absolute path for keystore to avoid path resolution issues
+            KEYSTORE_PATH="$(pwd)/app/release.keystore"
+            
+            # Verify keystore exists before building
+            if [ ! -f "$KEYSTORE_PATH" ]; then
+              echo "❌ ERROR: Keystore not found at $KEYSTORE_PATH"
+              echo "Available files in app/:"
+              ls -la app/ | grep -E "keystore|\.jks"
+              exit 1
+            fi
+            
+            echo "📝 Keystore path: $KEYSTORE_PATH"
+            echo ""
+            
             ./gradlew assembleRelease \
-              -Pandroid.injected.signing.store.file=app/release.keystore \
-              -Pandroid.injected.signing.store.password=$ANDROID_KEYSTORE_PASSWORD \
-              -Pandroid.injected.signing.key.alias=$ANDROID_KEY_ALIAS \
-              -Pandroid.injected.signing.key.password=$ANDROID_KEY_ALIAS_PASSWORD \
+              -Pandroid.injected.signing.store.file="$KEYSTORE_PATH" \
+              -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+              -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+              -Pandroid.injected.signing.key.password="$ANDROID_KEY_ALIAS_PASSWORD" \
               --info
           else
             echo "🔨 Building Debug APK..."

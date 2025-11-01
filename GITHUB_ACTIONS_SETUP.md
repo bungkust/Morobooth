@@ -134,6 +134,12 @@ morobooth-v{VERSION}-{BUILD_TYPE}-{DATE}-{TIME}.apk
    - Cek Android SDK setup
    - Pastikan Java 17 terinstall
 
+4. **Keystore path error** (FIXED ✅)
+   - Error: `file '.../app/app/release.keystore' which doesn't exist`
+   - Cause: Relative path menyebabkan Gradle salah interpret
+   - Fix: Gunakan absolute path `$(pwd)/app/release.keystore`
+   - Status: ✅ Sudah diperbaiki dengan absolute path + verification
+
 ### APK Tidak Bisa Install
 
 **Check:**
