@@ -252,3 +252,67 @@ jobs:
           path: output/${{ steps.version.outputs.APK_NAME }}.apk
           retention-days: 30
 
+      - name: Get APK Info
+        id: apk_info
+        run: |
+          APK_PATH="output/${{ steps.version.outputs.APK_NAME }}.apk"
+          APK_SIZE=$(ls -lh "$APK_PATH" | awk '{print $5}')
+          echo "size=$APK_SIZE" >> $GITHUB_OUTPUT
+          echo "APK Size: $APK_SIZE"
+
+      - name: Send Telegram Notification (Success)
+        if: success() && vars.TELEGRAM_BOT_TOKEN != '' && vars.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ vars.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ vars.TELEGRAM_CHAT_ID }}" \
+            -d parse_mode="HTML" \
+            -d text="✅ <b>Build Android Berhasil!</b>%0A%0A📱 <b>Aplikasi:</b> MoroBooth%0A🔖 <b>Version:</b> ${{ steps.version.outputs.version }}%0A🏗️ <b>Build Type:</b> ${{ inputs.buildType }}%0A📦 <b>APK Size:</b> ${{ steps.apk_info.outputs.size }}%0A🌐 <b>WebView URL:</b> ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}%0A⏱️ <b>Build Time:</b> ${{ steps.version.outputs.build_date }}-${{ steps.version.outputs.build_time }}%0A%0A🔗 <a href='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'>Lihat Detail Build</a>"
+
+      - name: Send Telegram Notification (Failure)
+        if: failure() && vars.TELEGRAM_BOT_TOKEN != '' && vars.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -s -X POST "https://api.telegram.org/bot${{ vars.TELEGRAM_BOT_TOKEN }}/sendMessage" \
+            -d chat_id="${{ vars.TELEGRAM_CHAT_ID }}" \
+            -d parse_mode="HTML" \
+            -d text="❌ <b>Build Android Gagal!</b>%0A%0A📱 <b>Aplikasi:</b> MoroBooth%0A🔖 <b>Version:</b> ${{ steps.version.outputs.version }}%0A🏗️ <b>Build Type:</b> ${{ inputs.buildType }}%0A%0A🔗 <a href='https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}'>Lihat Error Logs</a>"
+
+      - name: Send Discord Notification (Success)
+        if: success() && vars.DISCORD_WEBHOOK_URL != ''
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "✅ Build Android Berhasil!",
+                "color": 5763719,
+                "fields": [
+                  {"name": "📱 Aplikasi", "value": "MoroBooth", "inline": true},
+                  {"name": "🔖 Version", "value": "${{ steps.version.outputs.version }}", "inline": true},
+                  {"name": "🏗️ Build Type", "value": "${{ inputs.buildType }}", "inline": true},
+                  {"name": "📦 APK Size", "value": "${{ steps.apk_info.outputs.size }}", "inline": true},
+                  {"name": "🌐 WebView URL", "value": "${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}", "inline": false},
+                  {"name": "🔗 Download", "value": "[Lihat Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": false}
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' \
+            "${{ vars.DISCORD_WEBHOOK_URL }}"
+
+      - name: Send Discord Notification (Failure)
+        if: failure() && vars.DISCORD_WEBHOOK_URL != ''
+        run: |
+          curl -s -H "Content-Type: application/json" \
+            -d '{
+              "embeds": [{
+                "title": "❌ Build Android Gagal!",
+                "color": 15548997,
+                "fields": [
+                  {"name": "📱 Aplikasi", "value": "MoroBooth", "inline": true},
+                  {"name": "🔖 Version", "value": "${{ steps.version.outputs.version }}", "inline": true},
+                  {"name": "🏗️ Build Type", "value": "${{ inputs.buildType }}", "inline": true},
+                  {"name": "🔗 Error Logs", "value": "[Lihat Detail](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})", "inline": false}
+                ],
+                "timestamp": "'$(date -u +%Y-%m-%dT%H:%M:%S.000Z)'"
+              }]
+            }' \
+            "${{ vars.DISCORD_WEBHOOK_URL }}"
+

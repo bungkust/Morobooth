@@ -231,9 +231,51 @@ Update version di `apps/mobile/app.json`:
 
 APK akan otomatis menggunakan version ini untuk naming.
 
+## Build Notifications (NEW! ✨)
+
+Workflow sekarang bisa mengirim notifikasi otomatis ketika build selesai!
+
+### Setup Notifikasi
+
+**Pilihan:**
+1. **Telegram** - Mudah, gratis, push notification ke HP
+2. **Discord** - Rich embeds di Discord channel
+3. **Keduanya** - Setup semua untuk dapat notifikasi di 2 platform
+
+**Notifikasi akan menampilkan:**
+- ✅/❌ Status build (berhasil/gagal)
+- 📱 App name, version, build type
+- 📦 APK size
+- 🌐 WebView URL
+- 🔗 Link download atau error logs
+
+### Quick Setup
+
+**Telegram:**
+1. Buat bot via [@BotFather](https://t.me/BotFather)
+2. Dapatkan Chat ID
+3. Set GitHub Variables:
+   - `TELEGRAM_BOT_TOKEN`
+   - `TELEGRAM_CHAT_ID`
+
+**Discord:**
+1. Buat webhook di Discord channel
+2. Set GitHub Variable:
+   - `DISCORD_WEBHOOK_URL`
+
+**📖 Dokumentasi lengkap:** Lihat file `NOTIFICATION_SETUP.md`
+
+### Cara Kerja
+
+- Notifikasi otomatis terkirim setelah build selesai
+- Jika build berhasil → Notifikasi sukses dengan info APK
+- Jika build gagal → Notifikasi error dengan link logs
+- Tidak terkirim jika variables tidak di-set (optional)
+
 ## Support
 
 - **Workflow file**: `.github/workflows/android-build.yml`
 - **Build logs**: GitHub Actions → Workflow runs
 - **Artifacts**: Tersimpan 30 hari
+- **Notification setup**: `NOTIFICATION_SETUP.md`
 
