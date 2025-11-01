@@ -1,17 +1,24 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
 
+interface NativePrinterInfo {
+  name?: string;
+  address?: string;
+  [key: string]: any;
+}
+
 export class HybridBluetoothPrinterService {
   private webBluetooth: UniversalBluetoothPrinterService | null = null;
   private isNative: boolean = false;
   private isConnected: boolean = false;
-  private printerInfo: any = null;
+  private printerInfo: NativePrinterInfo | null = null;
 
   constructor() {
     this.isNative = nativeBridge.isNativeApp() && nativeBridge.hasNativeBluetooth();
     
     if (this.isNative) {
       this.setupNativeListeners();
+      this.requestNativeStatus();
     }
   }
 
@@ -25,7 +32,11 @@ export class HybridBluetoothPrinterService {
 
     nativeBridge.onMessage('BLUETOOTH_CONNECTED', (data) => {
       this.isConnected = data.connected;
-      this.printerInfo = { name: 'Native Bluetooth Printer', address: data.device?.id };
+      this.printerInfo = {
+        name: data.device?.name || 'Native Bluetooth Printer',
+        address: data.device?.id,
+        ...data.device,
+      };
       
       // Notify UI
       const event = new CustomEvent('bluetoothStatusChange', { 
@@ -78,14 +89,10 @@ export class HybridBluetoothPrinterService {
 
   async connect(address?: string): Promise<boolean> {
     if (this.isNative) {
-      if (address) {
-        nativeBridge.sendMessage('CONNECT_BLUETOOTH_PRINTER', { deviceId: address });
-        return true;
-      } else {
-        // Trigger scan first
-        await this.scanPrinters();
-        return false;
-      }
+      const payload = address ? { deviceId: address } : undefined;
+      nativeBridge.sendMessage('CONNECT_BLUETOOTH_PRINTER', payload);
+      // Native modal will handle the connection process and emit status events
+      return true;
     } else {
       // Fallback to Web Bluetooth
       this.webBluetooth = new UniversalBluetoothPrinterService();
@@ -221,6 +228,10 @@ export class HybridBluetoothPrinterService {
 
   getIsConnected(): boolean {
     return this.isConnected;
+  }
+
+  private requestNativeStatus(): void {
+    nativeBridge.sendMessage('GET_PRINTER_STATUS');
   }
 }
 
