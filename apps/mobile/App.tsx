@@ -166,7 +166,7 @@ function App() {
         
         // Show toast to user
         if (Platform.OS === 'android') {
-          ToastAndroid.show('?? Reconnecting to printer...', ToastAndroid.SHORT);
+          ToastAndroid.show('Reconnecting to printer...', ToastAndroid.SHORT);
         }
         
         try {
@@ -184,7 +184,7 @@ function App() {
           
           // Show success toast
           if (Platform.OS === 'android') {
-            ToastAndroid.show(`? Connected to ${lastPrinter.name}`, ToastAndroid.SHORT);
+            ToastAndroid.show(`Connected to ${lastPrinter.name}`, ToastAndroid.SHORT);
           }
         } catch (error) {
           // Couldn't reconnect, clear saved printer
@@ -377,7 +377,7 @@ function App() {
       
       // Show success toast
       if (Platform.OS === 'android') {
-        ToastAndroid.show(`? Printer ready: ${device.name}`, ToastAndroid.SHORT);
+        ToastAndroid.show(`Printer ready: ${device.name}`, ToastAndroid.SHORT);
       }
       
       console.log('App: Printer connected successfully');
