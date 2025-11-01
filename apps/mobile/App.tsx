@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text } from 'react-native';
+import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text, ToastAndroid } from 'react-native';
 import WebView from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import * as KeepAwake from 'expo-keep-awake';
@@ -162,20 +162,54 @@ function App() {
     try {
       const lastPrinter = await PrinterStorage.getLastPrinter();
       if (lastPrinter) {
-        const connected = await printer.connect(lastPrinter.id);
-        if (connected) {
+        console.log('App: Auto-connecting to last printer:', lastPrinter.name);
+        
+        // Show toast to user
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('?? Reconnecting to printer...', ToastAndroid.SHORT);
+        }
+        
+        try {
+          await printer.connect(lastPrinter.id);
+          
+          // Successfully reconnected
           setConnectedDevice(lastPrinter);
+          console.log('App: Auto-connect successful');
+          
+          // Notify WebView
           sendMessageToWebView({
             type: 'BLUETOOTH_CONNECTED',
-            data: { connected: true, device: lastPrinter }
+            data: { connected: true, device: lastPrinter, autoConnected: true }
           });
-        } else {
+          
+          // Show success toast
+          if (Platform.OS === 'android') {
+            ToastAndroid.show(`? Connected to ${lastPrinter.name}`, ToastAndroid.SHORT);
+          }
+        } catch (error) {
           // Couldn't reconnect, clear saved printer
+          console.log('App: Auto-connect failed, clearing saved printer');
           await PrinterStorage.clearLastPrinter();
+          
+          // Notify WebView that no printer is connected
+          sendMessageToWebView({
+            type: 'BLUETOOTH_DISCONNECTED',
+            data: { connected: false, reason: 'auto-connect-failed' }
+          });
+          
+          // Don't show error toast - will ask user to connect when they try to print
         }
+      } else {
+        // No saved printer
+        console.log('App: No saved printer found');
+        sendMessageToWebView({
+          type: 'BLUETOOTH_DISCONNECTED',
+          data: { connected: false, reason: 'no-saved-printer' }
+        });
       }
     } catch (error) {
       console.error('Auto-connect error:', error);
+      Sentry.captureException(error);
     }
   };
 
@@ -184,6 +218,17 @@ function App() {
       const message = JSON.parse(event.nativeEvent.data);
       
       switch (message.type) {
+        case 'GET_PRINTER_STATUS':
+          // WebView asking for current printer status
+          console.log('App: GET_PRINTER_STATUS received');
+          sendMessageToWebView({
+            type: connectedDevice ? 'BLUETOOTH_CONNECTED' : 'BLUETOOTH_DISCONNECTED',
+            data: connectedDevice 
+              ? { connected: true, device: connectedDevice }
+              : { connected: false }
+          });
+          break;
+          
         case 'SCAN_BLUETOOTH_PRINTERS':
           console.log('App: SCAN_BLUETOOTH_PRINTERS received, checking permissions...');
           await checkPermissionAndOpenModal();
@@ -200,11 +245,29 @@ function App() {
           break;
           
         case 'PRINT_DITHERED_BITMAP':
-          await handlePrintBitmap(
-            message.data.bitmapBase64,
-            message.data.width,
-            message.data.height
-          );
+          // Check if already connected
+          if (!connectedDevice) {
+            console.log('App: Print requested but no printer connected, opening modal...');
+            // Show modal to connect first
+            await checkPermissionAndOpenModal();
+            // Don't print yet - user needs to connect first
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: { 
+                success: false, 
+                error: 'No printer connected. Please connect to a printer first.',
+                needsConnection: true
+              }
+            });
+          } else {
+            // Printer already connected, print directly
+            console.log('App: Printer connected, printing directly...');
+            await handlePrintBitmap(
+              message.data.bitmapBase64,
+              message.data.width,
+              message.data.height
+            );
+          }
           break;
           
         case 'LOG_ERROR':
@@ -312,6 +375,11 @@ function App() {
         data: { connected: true, device }
       });
       
+      // Show success toast
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`? Printer ready: ${device.name}`, ToastAndroid.SHORT);
+      }
+      
       console.log('App: Printer connected successfully');
     } catch (error) {
       console.error('App: Connection error:', error);
@@ -323,13 +391,23 @@ function App() {
   };
 
   const handleDisconnectPrinter = async () => {
+    const deviceName = connectedDevice?.name || 'Printer';
+    
     await printer.disconnect();
     await PrinterStorage.clearLastPrinter();
     setConnectedDevice(null);
+    
     sendMessageToWebView({
       type: 'BLUETOOTH_DISCONNECTED',
-      data: { connected: false }
+      data: { connected: false, reason: 'user-disconnected' }
     });
+    
+    // Show toast
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(`Disconnected from ${deviceName}`, ToastAndroid.SHORT);
+    }
+    
+    console.log('App: Printer disconnected');
   };
 
   const handlePrintBitmap = async (
