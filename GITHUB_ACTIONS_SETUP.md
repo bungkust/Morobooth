@@ -41,6 +41,24 @@ Buka: `https://github.com/{username}/{repo}/settings/secrets/actions`
 - **Value**: Password key alias
 - **Contoh**: `91bbecc4c62656256d1cac57201a52d0`
 
+#### 5. TELEGRAM_BOT_TOKEN *(opsional, aktifkan jika mau notifikasi Telegram)*
+- **Value**: Token bot dari BotFather (`123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZ`)
+- **Cara mendapatkan**:
+  1. Buka Telegram → cari dan buka **@BotFather**
+  2. Jalankan perintah `/newbot`, beri nama dan username untuk bot
+  3. Salin token API yang diberikan BotFather → simpan sebagai secret
+
+#### 6. TELEGRAM_CHAT_ID *(opsional, aktifkan jika mau notifikasi Telegram)*
+- **Value**: Chat ID (ID user pribadi atau grup tempat notifikasi dikirim)
+- **Cara mendapatkan untuk chat pribadi**:
+  1. Buka bot yang baru dibuat → klik **Start**
+  2. Akses `https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getUpdates`
+  3. Catat nilai `message.chat.id` dari respons JSON
+- **Cara mendapatkan untuk grup**:
+  1. Tambahkan bot ke grup dan kirim pesan apa saja di grup tersebut
+  2. Buka `https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/getUpdates`
+  3. Catat nilai `message.chat.id` (biasanya bernilai negatif)
+
 ## Workflow Configuration
 
 ### File: `.github/workflows/android-build.yml`
@@ -51,6 +69,7 @@ Workflow sudah dikonfigurasi untuk:
 - ✅ Auto naming dengan version + timestamp
 - ✅ Upload artifact
 - ✅ Custom WebView URL support (optional input)
+- ✅ Notifikasi Telegram (opsional) untuk status sukses/gagal dengan info step yang error
 
 ### Workflow Inputs
 
@@ -64,6 +83,22 @@ Saat trigger workflow, Anda bisa set:
    - Default: `https://morobooth.netlify.app` (dari `app.json`)
    - Bisa override untuk test dengan URL lain
    - Contoh: `https://staging-morobooth.netlify.app` atau local URL untuk testing
+
+## Telegram Notifications
+
+Jika secrets `TELEGRAM_BOT_TOKEN` dan `TELEGRAM_CHAT_ID` diisi, workflow otomatis mengirim notifikasi Telegram di akhir job:
+
+- **Sukses** → Pesan ✅ berisi branch, build type, nama file APK, dan link artifact/run
+- **Gagal** → Pesan ❌ berisi branch, build type, nama step yang gagal, dan link langsung ke log run
+- Step notifikasi akan otomatis skip (tanpa error) apabila secrets Telegram belum diset
+
+### Cara Tes Notifikasi
+
+1. Pastikan kedua secret Telegram sudah dibuat
+2. Trigger workflow secara manual dari tab Actions
+3. Cek chat atau grup Telegram yang ditentukan untuk memastikan pesan terkirim
+
+> Catatan: Nama step yang gagal diambil dari GitHub Actions. Gunakan informasi ini sebagai clue utama sebelum meninjau log lengkap di GitHub.
 
 ### Build Type Details
 
