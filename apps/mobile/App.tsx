@@ -43,6 +43,11 @@ function App() {
     };
   }, []);
 
+  // Debug: Monitor modal state changes
+  useEffect(() => {
+    console.log('App: showPrinterModal state changed to:', showPrinterModal);
+  }, [showPrinterModal]);
+
   const initializeApp = async () => {
     try {
       await printer.init();
@@ -231,13 +236,23 @@ function App() {
           
         case 'SCAN_BLUETOOTH_PRINTERS':
           console.log('App: SCAN_BLUETOOTH_PRINTERS received, checking permissions...');
-          await checkPermissionAndOpenModal();
+          try {
+            await checkPermissionAndOpenModal();
+            console.log('App: checkPermissionAndOpenModal completed for SCAN_BLUETOOTH_PRINTERS');
+          } catch (error) {
+            console.error('App: Error in checkPermissionAndOpenModal for SCAN:', error);
+          }
           break;
           
         case 'CONNECT_BLUETOOTH_PRINTER':
           // Check permission before showing modal
           console.log('App: CONNECT_BLUETOOTH_PRINTER received, checking permissions...');
-          await checkPermissionAndOpenModal();
+          try {
+            await checkPermissionAndOpenModal();
+            console.log('App: checkPermissionAndOpenModal completed for CONNECT_BLUETOOTH_PRINTER');
+          } catch (error) {
+            console.error('App: Error in checkPermissionAndOpenModal for CONNECT:', error);
+          }
           break;
           
         case 'DISCONNECT_BLUETOOTH_PRINTER':
@@ -291,10 +306,14 @@ function App() {
   };
 
   const checkPermissionAndOpenModal = async () => {
+    console.log('App: checkPermissionAndOpenModal called');
+    
     if (Platform.OS === 'android') {
       // Check if permissions are already granted
       const scanGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
       const connectGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+      
+      console.log('App: Permission check - scanGranted:', scanGranted, 'connectGranted:', connectGranted);
       
       if (!scanGranted || !connectGranted) {
         // Permission not granted, request it
@@ -316,34 +335,45 @@ function App() {
               {
                 text: 'Grant Permission',
                 onPress: async () => {
-                  const results = await PermissionsAndroid.requestMultiple([
-                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                  ]);
-                  
-                  const bluetoothGranted = 
-                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
-                  
-                  if (bluetoothGranted) {
-                    console.log('App: Permission granted, opening modal');
-                    setShowPrinterModal(true);
-                  } else {
-                    Alert.alert(
-                      '?? Permission Required',
-                      'Bluetooth permission is required to connect to the printer. Please grant the permission to continue.',
-                      [
-                        {
-                          text: 'Try Again',
-                          onPress: () => checkPermissionAndOpenModal()
-                        },
-                        {
-                          text: 'Cancel',
-                          style: 'cancel'
-                        }
-                      ]
-                    );
+                  try {
+                    const results = await PermissionsAndroid.requestMultiple([
+                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                    ]);
+                    
+                    console.log('App: Permission request results:', results);
+                    
+                    const bluetoothGranted = 
+                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                    
+                    if (bluetoothGranted) {
+                      console.log('App: Permission granted, opening modal');
+                      // Small delay to ensure state update happens after Alert dismisses
+                      setTimeout(() => {
+                        console.log('App: Setting showPrinterModal to true');
+                        setShowPrinterModal(true);
+                      }, 300);
+                    } else {
+                      console.log('App: Permission not granted after request');
+                      Alert.alert(
+                        '?? Permission Required',
+                        'Bluetooth permission is required to connect to the printer. Please grant the permission to continue.',
+                        [
+                          {
+                            text: 'Try Again',
+                            onPress: () => checkPermissionAndOpenModal()
+                          },
+                          {
+                            text: 'Cancel',
+                            style: 'cancel'
+                          }
+                        ]
+                      );
+                    }
+                  } catch (error) {
+                    console.error('App: Error requesting permissions:', error);
                   }
                   resolve();
                 }
@@ -355,8 +385,15 @@ function App() {
     }
     
     // Permission already granted or not Android, open modal
-    console.log('App: Permission granted, opening modal');
-    setShowPrinterModal(true);
+    console.log('App: Permission already granted or not Android, opening modal');
+    console.log('App: Current showPrinterModal state before update:', showPrinterModal);
+    
+    // Small delay to ensure state update happens reliably
+    // This helps avoid race conditions with any pending async operations
+    setTimeout(() => {
+      console.log('App: Setting showPrinterModal to true (permission already granted)');
+      setShowPrinterModal(true);
+    }, 100);
   };
 
   const handleSelectPrinter = async (device: PrinterDevice) => {
