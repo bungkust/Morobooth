@@ -59,6 +59,13 @@ jobs:
         run: |
           echo "Checking app.json configuration..."
           node -e "const config = require('./app.json'); console.log('Webview URL:', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
+
+      - name: Prebuild Android
+        working-directory: ./apps/mobile
+        env:
+          EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}
+        run: |
+          npx expo prebuild --platform android --clean
           
       - name: Ensure assets directory exists
         working-directory: ./apps/mobile
