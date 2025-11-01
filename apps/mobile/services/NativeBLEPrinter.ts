@@ -72,7 +72,10 @@ export class NativeBLEPrinter {
       return printers;
     } catch (error) {
       console.error('Error getting bonded peripherals:', error);
-      return [];
+      if (error instanceof Error) {
+        throw error;
+      }
+      throw new Error(String(error));
     }
   }
 
