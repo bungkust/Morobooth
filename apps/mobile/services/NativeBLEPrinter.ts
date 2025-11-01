@@ -82,17 +82,36 @@ export class NativeBLEPrinter {
       
       // Add timeout to prevent hanging
       const connectPromise = BleManager.connect(deviceId);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 10000)
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout after 10 seconds')), 10000)
       );
       
-      await Promise.race([connectPromise, timeoutPromise]);
+      try {
+        await Promise.race([connectPromise, timeoutPromise]);
+      } catch (connectError) {
+        const error = connectError instanceof Error 
+          ? connectError 
+          : new Error(`BleManager.connect failed: ${String(connectError)}`);
+        error.stack = error.stack || new Error().stack;
+        throw error;
+      }
       
       console.log('Connected, discovering services...');
-      const peripheralInfo = await BleManager.retrieveServices(deviceId);
+      let peripheralInfo;
+      try {
+        peripheralInfo = await BleManager.retrieveServices(deviceId);
+      } catch (serviceError) {
+        const error = serviceError instanceof Error 
+          ? serviceError 
+          : new Error(`Failed to retrieve services: ${String(serviceError)}`);
+        error.stack = error.stack || new Error().stack;
+        throw error;
+      }
       
       if (!peripheralInfo.services || peripheralInfo.services.length === 0) {
-        throw new Error('No services found');
+        const error = new Error('No services found on the connected device');
+        error.stack = new Error().stack;
+        throw error;
       }
       
       // Dynamic UUID discovery
@@ -137,13 +156,23 @@ export class NativeBLEPrinter {
       throw new Error('No writable characteristic found');
     } catch (error) {
       console.error('Connect error:', error);
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const stackTrace = error instanceof Error ? error.stack : undefined;
+      console.error('Connect error stack:', stackTrace);
+      
       // Make sure to disconnect on failure
       try {
         await BleManager.disconnect(deviceId);
       } catch (e) {
         // Ignore disconnect errors
       }
-      return false;
+      
+      // Re-throw error with stack trace so it can be caught by caller
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(`Connection failed: ${errorMsg}`);
+      }
     }
   }
 

@@ -185,9 +185,21 @@ function App() {
     } catch (error) {
       Sentry.captureException(error);
       console.error('Message handling error:', error);
+      
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const stackTrace = error instanceof Error ? error.stack : 'No stack trace available';
+      const fullError = error instanceof Error 
+        ? `${error.name}: ${error.message}\n\nStack:\n${stackTrace || 'No stack trace'}`
+        : `Error: ${String(error)}`;
+      
       sendMessageToWebView({
         type: 'BLUETOOTH_ERROR',
-        data: { error: String(error) }
+        data: { 
+          error: errorMsg,
+          stack: stackTrace,
+          stackTrace: stackTrace,
+          fullError: fullError
+        }
       });
     }
   };
@@ -219,12 +231,30 @@ function App() {
     } catch (error) {
       console.error('App: Connection error:', error);
       Sentry.captureException(error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to connect to printer';
+      
+      // Extract error details with stack trace
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const stackTrace = error instanceof Error ? error.stack : 'No stack trace available';
+      const fullError = error instanceof Error 
+        ? `${error.name}: ${error.message}\n\nStack:\n${stackTrace || 'No stack trace'}`
+        : `Error: ${String(error)}`;
+      
+      console.error('Full error details:', fullError);
+      console.error('Stack trace:', stackTrace);
+      
+      // Send error with stack trace to webview
       sendMessageToWebView({
         type: 'BLUETOOTH_ERROR',
-        data: { error: errorMsg }
+        data: { 
+          error: errorMsg,
+          stack: stackTrace,
+          stackTrace: stackTrace,
+          fullError: fullError
+        }
       });
-      Alert.alert('Error', `Failed to connect: ${errorMsg}`);
+      
+      // Show alert with error details
+      Alert.alert('Bluetooth Connect Error', `${errorMsg}\n\nStack:\n${stackTrace.substring(0, 200)}...`);
     }
   };
 
@@ -268,11 +298,26 @@ function App() {
       }
     } catch (error) {
       Sentry.captureException(error);
+      
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const stackTrace = error instanceof Error ? error.stack : 'No stack trace available';
+      const fullError = error instanceof Error 
+        ? `${error.name}: ${error.message}\n\nStack:\n${stackTrace || 'No stack trace'}`
+        : `Error: ${String(error)}`;
+      
+      console.error('Print error details:', fullError);
+      
       sendMessageToWebView({
         type: 'BLUETOOTH_ERROR',
-        data: { error: String(error), errorCode: 'PRINT_ERROR' }
+        data: { 
+          error: errorMsg,
+          stack: stackTrace,
+          stackTrace: stackTrace,
+          fullError: fullError,
+          errorCode: 'PRINT_ERROR'
+        }
       });
-      Alert.alert('Print Error', String(error));
+      Alert.alert('Print Error', `${errorMsg}\n\nStack:\n${stackTrace.substring(0, 200)}...`);
     }
   };
 
