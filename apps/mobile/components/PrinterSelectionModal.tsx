@@ -306,7 +306,9 @@ export const PrinterSelectionModal: React.FC<Props> = ({
   };
 
   console.log('PrinterSelectionModal: Rendering modal with isVisible=', isVisible);
+  console.log('PrinterSelectionModal: Modal component is being rendered');
 
+  // Always render Modal component - let react-native-modal handle visibility
   return (
     <Modal 
       isVisible={isVisible} 
@@ -316,9 +318,13 @@ export const PrinterSelectionModal: React.FC<Props> = ({
       animationIn="slideInUp"
       animationOut="slideOutDown"
       onBackButtonPress={state !== 'connecting' ? onClose : undefined}
-      useNativeDriver={true}
+      useNativeDriver={false}
       hideModalContentWhileAnimating={false}
       statusBarTranslucent={true}
+      avoidKeyboard={false}
+      onModalShow={() => console.log('PrinterSelectionModal: onModalShow called - modal is now visible!')}
+      onModalWillShow={() => console.log('PrinterSelectionModal: onModalWillShow called - modal is about to show!')}
+      onModalHide={() => console.log('PrinterSelectionModal: onModalHide called')}
     >
       <View style={styles.container}>
         <Text style={styles.title}>
