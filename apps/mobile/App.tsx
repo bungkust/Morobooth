@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text } from 'react-native';
+import { View, StyleSheet, Alert, PermissionsAndroid, Platform, BackHandler, Text, ToastAndroid } from 'react-native';
 import WebView from 'react-native-webview';
 import * as Linking from 'expo-linking';
 import * as KeepAwake from 'expo-keep-awake';
@@ -46,8 +46,14 @@ function App() {
   const initializeApp = async () => {
     try {
       await printer.init();
-      await requestAllPermissions();
-      await autoConnectLastPrinter();
+      
+      // Request permissions on startup
+      const permissionGranted = await requestAllPermissions();
+      
+      // Only auto-connect if we have permissions
+      if (permissionGranted) {
+        await autoConnectLastPrinter();
+      }
       
       // Network monitoring
       const unsubscribe = NetInfo.addEventListener(state => {
@@ -99,46 +105,111 @@ function App() {
     return () => backHandler.remove();
   };
 
-  const requestAllPermissions = async () => {
+  const requestAllPermissions = async (): Promise<boolean> => {
     if (Platform.OS === 'android') {
       try {
-        const permissions = [
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-          PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-        ];
-        
-        if (Platform.Version >= 33) {
-          permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
-        }
-        
-        await PermissionsAndroid.requestMultiple(permissions);
+        // Show explanation first
+        return await new Promise((resolve) => {
+          Alert.alert(
+            '??? Bluetooth Permission Required',
+            'Morobooth needs Bluetooth permission to connect to your thermal printer.\n\nWithout this permission, you cannot print photos.',
+            [
+              {
+                text: 'Grant Permission',
+                onPress: async () => {
+                  const permissions = [
+                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                    PermissionsAndroid.PERMISSIONS.CAMERA,
+                  ];
+                  
+                  if (Platform.Version >= 33) {
+                    permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+                  }
+                  
+                  const results = await PermissionsAndroid.requestMultiple(permissions);
+                  
+                  // Check if Bluetooth permissions are granted
+                  const bluetoothGranted = 
+                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                  
+                  if (!bluetoothGranted) {
+                    Alert.alert(
+                      '?? Permission Denied',
+                      'Bluetooth permission is required to use the printer feature. You will be asked again when you try to connect to a printer.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                  
+                  resolve(bluetoothGranted);
+                }
+              }
+            ]
+          );
+        });
       } catch (err) {
         Sentry.captureException(err);
         console.error('Permission error:', err);
+        return false;
       }
     }
+    return true;
   };
 
   const autoConnectLastPrinter = async () => {
     try {
       const lastPrinter = await PrinterStorage.getLastPrinter();
       if (lastPrinter) {
-        const connected = await printer.connect(lastPrinter.id);
-        if (connected) {
+        console.log('App: Auto-connecting to last printer:', lastPrinter.name);
+        
+        // Show toast to user
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('Reconnecting to printer...', ToastAndroid.SHORT);
+        }
+        
+        try {
+          await printer.connect(lastPrinter.id);
+          
+          // Successfully reconnected
           setConnectedDevice(lastPrinter);
+          console.log('App: Auto-connect successful');
+          
+          // Notify WebView
           sendMessageToWebView({
             type: 'BLUETOOTH_CONNECTED',
-            data: { connected: true, device: lastPrinter }
+            data: { connected: true, device: lastPrinter, autoConnected: true }
           });
-        } else {
+          
+          // Show success toast
+          if (Platform.OS === 'android') {
+            ToastAndroid.show(`Connected to ${lastPrinter.name}`, ToastAndroid.SHORT);
+          }
+        } catch (error) {
           // Couldn't reconnect, clear saved printer
+          console.log('App: Auto-connect failed, clearing saved printer');
           await PrinterStorage.clearLastPrinter();
+          
+          // Notify WebView that no printer is connected
+          sendMessageToWebView({
+            type: 'BLUETOOTH_DISCONNECTED',
+            data: { connected: false, reason: 'auto-connect-failed' }
+          });
+          
+          // Don't show error toast - will ask user to connect when they try to print
         }
+      } else {
+        // No saved printer
+        console.log('App: No saved printer found');
+        sendMessageToWebView({
+          type: 'BLUETOOTH_DISCONNECTED',
+          data: { connected: false, reason: 'no-saved-printer' }
+        });
       }
     } catch (error) {
       console.error('Auto-connect error:', error);
+      Sentry.captureException(error);
     }
   };
 
@@ -147,17 +218,26 @@ function App() {
       const message = JSON.parse(event.nativeEvent.data);
       
       switch (message.type) {
+        case 'GET_PRINTER_STATUS':
+          // WebView asking for current printer status
+          console.log('App: GET_PRINTER_STATUS received');
+          sendMessageToWebView({
+            type: connectedDevice ? 'BLUETOOTH_CONNECTED' : 'BLUETOOTH_DISCONNECTED',
+            data: connectedDevice 
+              ? { connected: true, device: connectedDevice }
+              : { connected: false }
+          });
+          break;
+          
         case 'SCAN_BLUETOOTH_PRINTERS':
-          console.log('App: SCAN_BLUETOOTH_PRINTERS received, opening modal');
-          setShowPrinterModal(true);
+          console.log('App: SCAN_BLUETOOTH_PRINTERS received, checking permissions...');
+          await checkPermissionAndOpenModal();
           break;
           
         case 'CONNECT_BLUETOOTH_PRINTER':
-          if (message.data?.deviceId) {
-            await handleConnectPrinter(message.data.deviceId);
-          } else {
-            setShowPrinterModal(true);
-          }
+          // Check permission before showing modal
+          console.log('App: CONNECT_BLUETOOTH_PRINTER received, checking permissions...');
+          await checkPermissionAndOpenModal();
           break;
           
         case 'DISCONNECT_BLUETOOTH_PRINTER':
@@ -165,11 +245,29 @@ function App() {
           break;
           
         case 'PRINT_DITHERED_BITMAP':
-          await handlePrintBitmap(
-            message.data.bitmapBase64,
-            message.data.width,
-            message.data.height
-          );
+          // Check if already connected
+          if (!connectedDevice) {
+            console.log('App: Print requested but no printer connected, opening modal...');
+            // Show modal to connect first
+            await checkPermissionAndOpenModal();
+            // Don't print yet - user needs to connect first
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: { 
+                success: false, 
+                error: 'No printer connected. Please connect to a printer first.',
+                needsConnection: true
+              }
+            });
+          } else {
+            // Printer already connected, print directly
+            console.log('App: Printer connected, printing directly...');
+            await handlePrintBitmap(
+              message.data.bitmapBase64,
+              message.data.width,
+              message.data.height
+            );
+          }
           break;
           
         case 'LOG_ERROR':
@@ -192,50 +290,124 @@ function App() {
     }
   };
 
-  const handleSelectPrinter = async (device: PrinterDevice) => {
-    await handleConnectPrinter(device.id);
+  const checkPermissionAndOpenModal = async () => {
+    if (Platform.OS === 'android') {
+      // Check if permissions are already granted
+      const scanGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+      const connectGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
+      
+      if (!scanGranted || !connectGranted) {
+        // Permission not granted, request it
+        console.log('App: Bluetooth permission not granted, requesting...');
+        
+        return await new Promise<void>((resolve) => {
+          Alert.alert(
+            '??? Bluetooth Permission Required',
+            'Morobooth needs Bluetooth permission to connect to your thermal printer.',
+            [
+              {
+                text: 'Cancel',
+                style: 'cancel',
+                onPress: () => {
+                  console.log('App: User cancelled permission request');
+                  resolve();
+                }
+              },
+              {
+                text: 'Grant Permission',
+                onPress: async () => {
+                  const results = await PermissionsAndroid.requestMultiple([
+                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                  ]);
+                  
+                  const bluetoothGranted = 
+                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                  
+                  if (bluetoothGranted) {
+                    console.log('App: Permission granted, opening modal');
+                    setShowPrinterModal(true);
+                  } else {
+                    Alert.alert(
+                      '?? Permission Required',
+                      'Bluetooth permission is required to connect to the printer. Please grant the permission to continue.',
+                      [
+                        {
+                          text: 'Try Again',
+                          onPress: () => checkPermissionAndOpenModal()
+                        },
+                        {
+                          text: 'Cancel',
+                          style: 'cancel'
+                        }
+                      ]
+                    );
+                  }
+                  resolve();
+                }
+              }
+            ]
+          );
+        });
+      }
+    }
+    
+    // Permission already granted or not Android, open modal
+    console.log('App: Permission granted, opening modal');
+    setShowPrinterModal(true);
   };
 
-  const handleConnectPrinter = async (deviceId: string) => {
+  const handleSelectPrinter = async (device: PrinterDevice) => {
+    console.log('App: handleSelectPrinter called for:', device.name);
+    
     try {
-      console.log('App: Attempting to connect to printer:', deviceId);
-      const connected = await printer.connect(deviceId);
-      if (connected) {
-        const device: PrinterDevice = { id: deviceId, name: 'Printer' };
-        setConnectedDevice(device);
-        
-        // Save for auto-reconnect
-        await PrinterStorage.saveLastPrinter(device);
-        
-        sendMessageToWebView({
-          type: 'BLUETOOTH_CONNECTED',
-          data: { connected: true, device }
-        });
-        
-        Alert.alert('Success', 'Printer connected!');
-      } else {
-        throw new Error('Connection failed - printer returned false');
+      // This will throw error if connection fails
+      await printer.connect(device.id);
+      
+      // Connection succeeded
+      setConnectedDevice(device);
+      await PrinterStorage.saveLastPrinter(device);
+      
+      sendMessageToWebView({
+        type: 'BLUETOOTH_CONNECTED',
+        data: { connected: true, device }
+      });
+      
+      // Show success toast
+      if (Platform.OS === 'android') {
+        ToastAndroid.show(`Printer ready: ${device.name}`, ToastAndroid.SHORT);
       }
+      
+      console.log('App: Printer connected successfully');
     } catch (error) {
       console.error('App: Connection error:', error);
       Sentry.captureException(error);
-      const errorMsg = error instanceof Error ? error.message : 'Failed to connect to printer';
-      sendMessageToWebView({
-        type: 'BLUETOOTH_ERROR',
-        data: { error: errorMsg }
-      });
-      Alert.alert('Error', `Failed to connect: ${errorMsg}`);
+      
+      // Re-throw so modal can handle it
+      throw error;
     }
   };
 
   const handleDisconnectPrinter = async () => {
+    const deviceName = connectedDevice?.name || 'Printer';
+    
     await printer.disconnect();
     await PrinterStorage.clearLastPrinter();
     setConnectedDevice(null);
+    
     sendMessageToWebView({
       type: 'BLUETOOTH_DISCONNECTED',
-      data: { connected: false }
+      data: { connected: false, reason: 'user-disconnected' }
     });
+    
+    // Show toast
+    if (Platform.OS === 'android') {
+      ToastAndroid.show(`Disconnected from ${deviceName}`, ToastAndroid.SHORT);
+    }
+    
+    console.log('App: Printer disconnected');
   };
 
   const handlePrintBitmap = async (
@@ -315,7 +487,9 @@ function App() {
         isVisible={showPrinterModal}
         onClose={() => setShowPrinterModal(false)}
         onSelectPrinter={handleSelectPrinter}
+        onDisconnect={handleDisconnectPrinter}
         printer={printer}
+        connectedDevice={connectedDevice}
       />
       
       {!isOnline && (
