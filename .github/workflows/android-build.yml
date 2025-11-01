@@ -62,17 +62,32 @@ jobs:
           echo "Checking app.json configuration..."
           node -e "const config = require('./app.json'); console.log('Webview URL (before):', config.expo.extra?.webviewUrl || 'NOT SET'); console.log('Version:', config.expo.version);"
           
+          echo "================================================"
+          echo "Updating app.json with webviewUrl"
+          echo "================================================"
+          
           # Update app.json with environment variable (matching EAS build behavior)
-          WEBVIEW_URL="${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}"
+          export WEBVIEW_URL="${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}"
+          
           node -e "
             const fs = require('fs');
             const config = require('./app.json');
+            
+            if (!config.expo.extra) {
+              config.expo.extra = {};
+            }
+            
             config.expo.extra.webviewUrl = process.env.WEBVIEW_URL;
+            
             fs.writeFileSync('./app.json', JSON.stringify(config, null, 2));
-            console.log('Webview URL (after):', config.expo.extra.webviewUrl);
-          " WEBVIEW_URL="$WEBVIEW_URL"
+            console.log('✅ Webview URL updated to:', config.expo.extra.webviewUrl);
+          "
           
-          echo "✅ app.json updated with webviewUrl: $WEBVIEW_URL"
+          # Verify the update
+          echo ""
+          echo "Verification:"
+          node -e "const config = require('./app.json'); console.log('  app.json now contains webviewUrl:', config.expo.extra.webviewUrl);"
+          echo "================================================"
 
       - name: Prebuild Android
         working-directory: ./apps/mobile
