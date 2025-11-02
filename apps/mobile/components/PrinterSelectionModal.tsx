@@ -177,9 +177,9 @@ export const PrinterSelectionModal: React.FC<Props> = ({
       onPress={() => handleSelectDevice(item)}
     >
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>📱 {item.name}</Text>
-        <Text style={styles.deviceId}>{item.id}</Text>
-        {item.rssi && <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>}
+        <Text style={styles.deviceName}>📱 {String(item.name || 'Unknown Device')}</Text>
+        <Text style={styles.deviceId}>{String(item.id || '')}</Text>
+        {item.rssi && <Text style={styles.deviceRssi}>Signal: {String(item.rssi)} dBm</Text>}
       </View>
       <Text style={styles.connectArrow}>→</Text>
     </TouchableOpacity>
