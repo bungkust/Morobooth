@@ -1,5 +1,7 @@
 # Morobooth Android App - Build & Debug Guide
 
+> **Quick Start:** Untuk debugging APK yang sudah di-install, lihat [APK-DEBUG-GUIDE.md](../../APK-DEBUG-GUIDE.md)
+
 ## Build Profiles
 
 ### 1. Debug Build (Testing)
@@ -30,15 +32,35 @@ eas build --platform android --profile production
 - **Distribution**: Store (Play Store ready)
 - **Use Case**: Public release
 
-## Debugging
+## Debugging APK yang sudah di-install
+
+### Setup Debugging
+1. **Install APK ke device**
+   ```bash
+   # Connect device via USB
+   adb devices
+   
+   # Install APK
+   adb install path/to/app.apk
+   
+   # Or via file manager di device
+   ```
+
+2. **Enable Developer Options di Android device**
+   - Settings → About phone → Tap "Build number" 7x
+   - Settings → Developer options → Enable "USB debugging"
 
 ### 1. PWA WebView Debugging
 ```bash
-# Open Chrome
+# Open Chrome di PC/Mac
 chrome://inspect/#devices
 
 # Select your device and "inspect" the WebView
 # Console logs will show PWA-side logs
+# Gunakan untuk debug:
+# - JavaScript errors di PWA
+# - Network requests
+# - Console.log dari PhotoBoothApp, AdminPage, etc
 ```
 
 ### 2. Native React Native Debugging
@@ -46,11 +68,17 @@ chrome://inspect/#devices
 # Connect device via USB
 adb devices
 
-# View logs
+# View real-time logs
 adb logcat | grep -E "ReactNativeJS|ReactNative|BLE|Bluetooth|Print|Error"
 
-# Or for specific app
+# View app-specific logs
 adb logcat | grep "com.bungkust.morobooth"
+
+# View all app logs (recommended)
+adb logcat *:S ReactNativeJS:V ReactNative:V com.bungkust.morobooth:* | grep -v "chromium"
+
+# Clear logs dan mulai fresh
+adb logcat -c && adb logcat | grep "com.bungkust.morobooth"
 ```
 
 ### 3. Sentry Error Tracking
@@ -72,6 +100,46 @@ adb shell dumpsys package com.bungkust.morobooth | grep permission
 
 # Monitor Bluetooth connections
 adb shell dumpsys bluetooth_manager | grep -A 5 "Bonded devices"
+```
+
+## Real-time Debugging Workflow
+
+### Step-by-step Debugging
+```bash
+# 1. Connect device
+adb devices
+
+# 2. Clear old logs
+adb logcat -c
+
+# 3. Start monitoring logs (keep terminal running)
+adb logcat *:S ReactNativeJS:V ReactNative:V com.bungkust.morobooth:* | grep -v "chromium"
+
+# 4. Install APK (in another terminal)
+adb install morobooth-debug.apk
+
+# 5. Watch logs while using app
+# Logs akan muncul real-time saat:
+# - App starting
+# - WebView loading
+# - Bluetooth scanning
+# - Printer connecting
+# - Printing photos
+```
+
+### Filter Logs by Feature
+```bash
+# Bluetooth only
+adb logcat | grep -E "Bluetooth|BLE|print"
+
+# WebView only
+adb logcat | grep "WebView"
+
+# Errors only
+adb logcat | grep -E "Error|Exception|FATAL"
+
+# All app activity
+adb logcat | grep "com.bungkust.morobooth"
 ```
 
 ## Key Debug Points
