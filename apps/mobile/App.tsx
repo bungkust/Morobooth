@@ -123,11 +123,17 @@ function App() {
                 text: 'Grant Permission',
                 onPress: async () => {
                   const permissions = [
-                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                    PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
                     PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
                     PermissionsAndroid.PERMISSIONS.CAMERA,
                   ];
+                  
+                  // Bluetooth permissions added in Android 12 (API 31+)
+                  if (Platform.Version >= 31) {
+                    permissions.push(
+                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
+                    );
+                  }
                   
                   if (Platform.Version >= 33) {
                     permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
@@ -136,9 +142,17 @@ function App() {
                   const results = await PermissionsAndroid.requestMultiple(permissions);
                   
                   // Check if Bluetooth permissions are granted
-                  const bluetoothGranted = 
-                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-                    results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                  // Android 12+ needs explicit BLUETOOTH_SCAN and BLUETOOTH_CONNECT
+                  // Android 11 and below: no runtime permissions needed for Bluetooth
+                  let bluetoothGranted = true;
+                  if (Platform.Version >= 31) {
+                    bluetoothGranted = 
+                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                  } else {
+                    // Android 11-: no runtime Bluetooth permissions required
+                    console.log('Android 11 detected: Bluetooth permissions not required');
+                  }
                   
                   if (!bluetoothGranted) {
                     Alert.alert(
@@ -313,8 +327,8 @@ function App() {
   const checkPermissionAndOpenModal = async () => {
     console.log('App: checkPermissionAndOpenModal called');
     
-    if (Platform.OS === 'android') {
-      // Check if permissions are already granted
+    if (Platform.OS === 'android' && Platform.Version >= 31) {
+      // Android 12+: Check if Bluetooth permissions are already granted
       const scanGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
       const connectGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
       
