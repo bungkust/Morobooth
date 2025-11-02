@@ -216,6 +216,15 @@ export class HybridBluetoothPrinterService {
   }
 
   isNativeEnvironment(): boolean {
+    // Re-check at runtime in case window.isNativeApp was not available during construction
+    const nowNative = nativeBridge.isNativeApp() && nativeBridge.hasNativeBluetooth();
+    if (nowNative && !this.isNative) {
+      console.log('Native environment detected at runtime, updating state');
+      this.isNative = nowNative;
+      if (nowNative) {
+        this.setupNativeListeners();
+      }
+    }
     return this.isNative;
   }
 
