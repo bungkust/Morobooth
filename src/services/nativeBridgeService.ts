@@ -5,6 +5,7 @@ export interface NativeMessage {
 
 export class NativeBridgeService {
   private messageHandlers: Map<string, (data: any) => void> = new Map();
+  private initialized: boolean = false;
 
   isNativeApp(): boolean {
     return window.isNativeApp === true;
@@ -32,6 +33,11 @@ export class NativeBridgeService {
   }
 
   init(): void {
+    if (this.initialized) {
+      return; // Already initialized, skip
+    }
+    this.initialized = true;
+
     window.addEventListener('message', (event) => {
       try {
         const message = JSON.parse(event.data);
