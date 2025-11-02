@@ -2,6 +2,7 @@
   "expo": {
     "name": "Morobooth",
     "slug": "morobooth",
+    "description": "A modern photo booth app that captures instant photos and prints them via Bluetooth thermal printers",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

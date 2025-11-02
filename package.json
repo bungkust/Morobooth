@@ -1,5 +1,6 @@
 {
   "name": "morobooth",
+  "description": "A modern, cross-platform photo booth application that captures instant photos and prints them via Bluetooth thermal printers",
   "private": true,
   "version": "0.0.0",
   "type": "module",

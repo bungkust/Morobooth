@@ -10,14 +10,16 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
-        name: 'Morobooth',
-        short_name: 'Moro',
-        description: 'B&W Dithered Photo Booth (MVP)',
+        name: 'Morobooth - Instant Photo Booth App',
+        short_name: 'Morobooth',
+        description: 'Professional photo booth app for events. Capture instant photos with Bluetooth thermal printer support.',
         theme_color: '#000000',
         background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         start_url: '/',
+        scope: '/',
+        categories: ['photo', 'lifestyle', 'utilities'],
         icons: [
           {
             src: 'https://placehold.co/192x192/000000/FFFFFF?text=MORO',
@@ -30,6 +32,16 @@ export default defineConfig({
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
+          }
+        ],
+        screenshots: [],
+        shortcuts: [
+          {
+            name: 'Start Photo Session',
+            short_name: 'Photo Session',
+            description: 'Start a new photo booth session',
+            url: '/',
+            icons: [{ src: '/icon-192x192.png', sizes: '192x192' }]
           }
         ]
       },

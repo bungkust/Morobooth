@@ -1,5 +1,6 @@
 {
   "name": "morobooth-expo",
+  "description": "Morobooth mobile application - React Native photo booth with native Bluetooth thermal printer support",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {

@@ -1,5 +1,6 @@
 {
   "name": "morobooth",
+  "description": "Morobooth web application - Progressive Web App photo booth with Bluetooth thermal printer support",
   "private": true,
   "version": "0.0.0",
   "type": "module",
