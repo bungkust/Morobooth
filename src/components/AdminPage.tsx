@@ -91,8 +91,15 @@ export const AdminPage = () => {
   useEffect(() => {
     nativeBridge.init();
     
+    // Check native environment
+    console.log('AdminPage: window.isNativeApp =', window.isNativeApp);
+    console.log('AdminPage: window.hasNativeBluetooth =', window.hasNativeBluetooth);
+    console.log('AdminPage: nativeBridge.isNativeApp() =', nativeBridge.isNativeApp());
+    console.log('AdminPage: nativeBridge.hasNativeBluetooth() =', nativeBridge.hasNativeBluetooth());
+    
     // Create shared printer instance
     const printerInstance = new HybridBluetoothPrinterService();
+    console.log('AdminPage: printerInstance.isNativeEnvironment() =', printerInstance.isNativeEnvironment());
     setBluetoothPrinter(printerInstance);
     
     // Listen for Bluetooth status changes
