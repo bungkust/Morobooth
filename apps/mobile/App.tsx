@@ -16,7 +16,6 @@ const WEBVIEW_URL = Constants.expoConfig?.extra?.webviewUrl || 'https://moroboot
 if (Constants.expoConfig?.extra?.sentryDsn) {
   Sentry.init({
     dsn: Constants.expoConfig.extra.sentryDsn,
-    enableInExpoDevelopment: false,
     debug: __DEV__,
   });
 }
@@ -128,14 +127,15 @@ function App() {
                   ];
                   
                   // Bluetooth permissions added in Android 12 (API 31+)
-                  if (Platform.Version >= 31) {
+                  const androidVersion = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
+                  if (androidVersion >= 31) {
                     permissions.push(
                       PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
                       PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT
                     );
                   }
                   
-                  if (Platform.Version >= 33) {
+                  if (androidVersion >= 33) {
                     permissions.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
                   }
                   
@@ -145,7 +145,7 @@ function App() {
                   // Android 12+ needs explicit BLUETOOTH_SCAN and BLUETOOTH_CONNECT
                   // Android 11 and below: no runtime permissions needed for Bluetooth
                   let bluetoothGranted = true;
-                  if (Platform.Version >= 31) {
+                  if (androidVersion >= 31) {
                     bluetoothGranted = 
                       results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
                       results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
@@ -327,88 +327,95 @@ function App() {
   const checkPermissionAndOpenModal = async () => {
     console.log('App: checkPermissionAndOpenModal called');
     
-    if (Platform.OS === 'android' && Platform.Version >= 31) {
+    const androidVersion = Platform.OS === 'android' ? (typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10)) : 0;
+    
+    if (Platform.OS === 'android' && androidVersion >= 31) {
       // Android 12+: Check if Bluetooth permissions are already granted
-      const scanGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
-      const connectGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
-      
-      console.log('App: Permission check - scanGranted:', scanGranted, 'connectGranted:', connectGranted);
-      
-      if (!scanGranted || !connectGranted) {
-        // Permission not granted, request it
-        console.log('App: Bluetooth permission not granted, requesting...');
+      try {
+        const scanGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN);
+        const connectGranted = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT);
         
-        return await new Promise<void>((resolve) => {
-          Alert.alert(
-            '??? Bluetooth Permission Required',
-            'Morobooth needs Bluetooth permission to connect to your thermal printer.',
-            [
-              {
-                text: 'Cancel',
-                style: 'cancel',
-                onPress: () => {
-                  console.log('App: User cancelled permission request');
-                  resolve();
-                }
-              },
-              {
-                text: 'Grant Permission',
-                onPress: async () => {
-                  try {
-                    const results = await PermissionsAndroid.requestMultiple([
-                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
-                      PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
-                      PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                    ]);
-                    
-                    console.log('App: Permission request results:', results);
-                    
-                    const bluetoothGranted = 
-                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
-                      results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
-                    
-                    if (bluetoothGranted) {
-                      console.log('App: Permission granted, opening modal');
-                      // Wait a bit for Alert to dismiss completely before showing modal
-                      setTimeout(() => {
-                        console.log('App: Setting showPrinterModal to true after Alert dismiss');
-                        setShowPrinterModal(true);
-                        // Force re-render check
-                        setTimeout(() => {
-                          console.log('App: Verifying modal state - should be true now');
-                        }, 100);
-                      }, 500);
-                    } else {
-                      console.log('App: Permission not granted after request');
-                      Alert.alert(
-                        '?? Permission Required',
-                        'Bluetooth permission is required to connect to the printer. Please grant the permission to continue.',
-                        [
-                          {
-                            text: 'Try Again',
-                            onPress: () => checkPermissionAndOpenModal()
-                          },
-                          {
-                            text: 'Cancel',
-                            style: 'cancel'
-                          }
-                        ]
-                      );
-                    }
-                  } catch (error) {
-                    console.error('App: Error requesting permissions:', error);
+        console.log('App: Permission check - scanGranted:', scanGranted, 'connectGranted:', connectGranted);
+        
+        if (!scanGranted || !connectGranted) {
+          // Permission not granted, request it
+          console.log('App: Bluetooth permission not granted, requesting...');
+          
+          return await new Promise<void>((resolve) => {
+            Alert.alert(
+              '🔐 Bluetooth Permission Required',
+              'Morobooth needs Bluetooth permission to connect to your thermal printer.',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => {
+                    console.log('App: User cancelled permission request');
+                    resolve();
                   }
-                  resolve();
+                },
+                {
+                  text: 'Grant Permission',
+                  onPress: async () => {
+                    try {
+                      const results = await PermissionsAndroid.requestMultiple([
+                        PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+                        PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
+                        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+                      ]);
+                      
+                      console.log('App: Permission request results:', results);
+                      
+                      const bluetoothGranted = 
+                        results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN] === PermissionsAndroid.RESULTS.GRANTED &&
+                        results[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+                      
+                      if (bluetoothGranted) {
+                        console.log('App: Permission granted, opening modal');
+                        // Wait a bit for Alert to dismiss completely before showing modal
+                        setTimeout(() => {
+                          console.log('App: Setting showPrinterModal to true after Alert dismiss');
+                          setShowPrinterModal(true);
+                          // Force re-render check
+                          setTimeout(() => {
+                            console.log('App: Verifying modal state - should be true now');
+                          }, 100);
+                        }, 500);
+                      } else {
+                        console.log('App: Permission not granted after request');
+                        Alert.alert(
+                          '⚠️ Permission Required',
+                          'Bluetooth permission is required to connect to the printer. Please grant the permission to continue.',
+                          [
+                            {
+                              text: 'Try Again',
+                              onPress: () => checkPermissionAndOpenModal()
+                            },
+                            {
+                              text: 'Cancel',
+                              style: 'cancel'
+                            }
+                          ]
+                        );
+                      }
+                    } catch (error) {
+                      console.error('App: Error requesting permissions:', error);
+                    }
+                    resolve();
+                  }
                 }
-              }
-            ]
-          );
-        });
+              ]
+            );
+          });
+        }
+      } catch (error) {
+        console.error('App: Error checking permissions:', error);
+        // If permission check fails, just open modal anyway
       }
     }
     
-    // Permission already granted or not Android, open modal
-    console.log('App: Permission already granted or not Android, opening modal');
+    // Permission already granted, Android 11 or below, or check failed - open modal
+    console.log('App: Opening printer modal');
     console.log('App: Current showPrinterModal before update:', showPrinterModal);
     
     // Set state and verify
