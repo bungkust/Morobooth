@@ -59,12 +59,14 @@ export class NativeBLEPrinter {
       const peripherals = await BleManager.getBondedPeripherals();
       console.log(`Found ${peripherals.length} bonded devices`);
       
-      // No filtering - show all bonded devices
-      const printers = peripherals.map((device: any) => ({
-        id: device.id,
-        name: device.name || 'Unknown Device',
-        rssi: device.rssi
-      }));
+      // Filter out null/undefined devices and map to PrinterDevice
+      const printers = peripherals
+        .filter((device: any) => device && device.id)
+        .map((device: any) => ({
+          id: device.id,
+          name: device.name ?? 'Unknown Device',
+          rssi: device.rssi
+        }));
       
       console.log(`Returning ${printers.length} devices`);
       return printers;

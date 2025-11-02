@@ -146,7 +146,7 @@ export const PrinterSelectionModal: React.FC<Props> = ({
   const handleDisconnect = () => {
     Alert.alert(
       'Disconnect Printer',
-      `Disconnect from ${connectedDevice?.name}?`,
+      `Disconnect from ${connectedDevice?.name ?? 'Printer'}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -177,9 +177,9 @@ export const PrinterSelectionModal: React.FC<Props> = ({
       onPress={() => handleSelectDevice(item)}
     >
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>📱 {item.name || 'Unknown Device'}</Text>
-        <Text style={styles.deviceId}>{item.id || ''}</Text>
-        {item.rssi !== undefined && item.rssi !== null && <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>}
+        <Text style={styles.deviceName}>📱 {item.name ?? 'Unknown Device'}</Text>
+        <Text style={styles.deviceId}>{item.id ?? ''}</Text>
+        {item.rssi !== undefined && <Text style={styles.deviceRssi}>Signal: {item.rssi} dBm</Text>}
       </View>
       <Text style={styles.connectArrow}>→</Text>
     </TouchableOpacity>
@@ -202,7 +202,7 @@ export const PrinterSelectionModal: React.FC<Props> = ({
             <ActivityIndicator size="large" color="#28a745" />
             <Text style={styles.stateTitle}>Connecting...</Text>
             <Text style={styles.stateSubtext}>
-              Connecting to {connectingDevice?.name}
+              Connecting to {connectingDevice?.name ?? 'Printer'}
             </Text>
             <Text style={styles.stateHint}>This may take up to 10 seconds</Text>
           </View>
@@ -213,11 +213,11 @@ export const PrinterSelectionModal: React.FC<Props> = ({
           <View style={styles.stateContainer}>
             <Text style={styles.successIcon}>✅</Text>
             <Text style={styles.stateTitle}>Connected!</Text>
-            <Text style={styles.stateSubtext}>{connectedDevice?.name}</Text>
+            <Text style={styles.stateSubtext}>{connectedDevice?.name ?? 'Printer'}</Text>
             
             <View style={styles.connectedInfo}>
               <Text style={styles.connectedLabel}>Device ID:</Text>
-              <Text style={styles.connectedValue}>{connectedDevice?.id}</Text>
+              <Text style={styles.connectedValue}>{connectedDevice?.id ?? 'N/A'}</Text>
             </View>
 
             <View style={styles.buttonRow}>
@@ -246,9 +246,9 @@ export const PrinterSelectionModal: React.FC<Props> = ({
           <View style={styles.stateContainer}>
             <ScrollView style={styles.errorScrollView}>
               <View style={styles.errorContainer}>
-                <Text style={styles.errorTitle}>⚠️ {error?.message}</Text>
+                <Text style={styles.errorTitle}>⚠️ {error?.message ?? 'Unknown error'}</Text>
                 <Text style={styles.errorText} selectable={true}>
-                  {error?.fullError}
+                  {error?.fullError ?? ''}
                 </Text>
               </View>
 
@@ -280,7 +280,7 @@ export const PrinterSelectionModal: React.FC<Props> = ({
             <FlatList
               data={devices}
               renderItem={renderDevice}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item, index) => item.id ?? index.toString()}
               style={styles.deviceList}
               ListEmptyComponent={
                 <View style={styles.emptyContainer}>
