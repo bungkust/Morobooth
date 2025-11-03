@@ -4,7 +4,7 @@ import { Controls } from './Controls';
 import { PreviewModal } from './PreviewModal';
 import { useWakeLock } from '../hooks/useWakeLock';
 import { generateQRCodeDataURL, getDownloadURL } from '../utils/qrCodeGenerator';
-import { HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
+import { getHybridBluetoothPrinterService, type HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 
 interface Template {
@@ -73,9 +73,18 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   useEffect(() => {
     nativeBridge.init();
     
-    // Create shared printer instance
-    const printerInstance = new HybridBluetoothPrinterService();
+    // Get singleton printer instance
+    const printerInstance = getHybridBluetoothPrinterService();
     setBluetoothPrinter(printerInstance);
+    
+    // Check current connection status on mount
+    console.log('PhotoBoothApp: Checking initial Bluetooth connection status...');
+    const currentlyConnected = printerInstance.getIsConnected();
+    console.log('PhotoBoothApp: Current connection status:', currentlyConnected);
+    if (currentlyConnected) {
+      setIsBluetoothConnected(true);
+      console.log('PhotoBoothApp: Bluetooth already connected on mount');
+    }
     
     // Listen for print progress
     const progressHandler = (event: any) => {
@@ -89,6 +98,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       setIsBluetoothConnected(event.detail.connected);
       if (event.detail.connected) {
         console.log('Bluetooth connected:', event.detail.info);
+      } else {
+        console.log('Bluetooth disconnected');
       }
     };
     window.addEventListener('bluetoothStatusChange', statusHandler);

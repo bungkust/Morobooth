@@ -233,5 +233,13 @@ export class HybridBluetoothPrinterService {
   }
 }
 
+// Export singleton instance
+let singletonInstance: HybridBluetoothPrinterService | null = null;
 
-
+export function getHybridBluetoothPrinterService(): HybridBluetoothPrinterService {
+  if (!singletonInstance) {
+    console.log('Creating singleton HybridBluetoothPrinterService');
+    singletonInstance = new HybridBluetoothPrinterService();
+  }
+  return singletonInstance;
+}

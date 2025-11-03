@@ -17,7 +17,7 @@ import {
   clearConfigCache,
   type ConfigOverride 
 } from '../services/configService';
-import { HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
+import { getHybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 
 export const AdminPage = () => {
@@ -97,8 +97,8 @@ export const AdminPage = () => {
     console.log('AdminPage: nativeBridge.isNativeApp() =', nativeBridge.isNativeApp());
     console.log('AdminPage: nativeBridge.hasNativeBluetooth() =', nativeBridge.hasNativeBluetooth());
     
-    // Create shared printer instance
-    const printerInstance = new HybridBluetoothPrinterService();
+    // Get singleton printer instance
+    const printerInstance = getHybridBluetoothPrinterService();
     console.log('AdminPage: printerInstance.isNativeEnvironment() =', printerInstance.isNativeEnvironment());
     setBluetoothPrinter(printerInstance);
     
