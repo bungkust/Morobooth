@@ -191,91 +191,26 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
 
       if (!dataURL) {
         console.error('Final composite not found for printing');
+        alert('Gagal: Foto tidak ditemukan');
         return;
       }
 
-      // Try Bluetooth printing first
-      if (isBluetoothConnected && bluetoothPrinter) {
-        const ok = await bluetoothPrinter.printImage(dataURL);
-        if (ok) {
-          alert('Printed via Bluetooth');
-          return;
-        }
-      }
-
-      // Create a new window for printing
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
-        console.error('Failed to open print window');
+      // Check if printer is connected
+      if (!bluetoothPrinter || !isBluetoothConnected) {
+        alert('Silahkan connect printer di halaman admin terlebih dahulu');
         return;
       }
-      
-      // Create print-friendly HTML (58mm thermal paper)
-      const printHTML = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <title>Morobooth Print</title>
-          <style>
-            @page {
-              size: 58mm auto; /* Thermal roll width */
-              margin: 3mm;     /* Small margins */
-            }
-            body {
-              margin: 0;
-              padding: 0;
-              font-family: monospace;
-              background: white;
-            }
-            .print-container {
-              width: 58mm;       /* lock container to paper width */
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              margin: 0 auto;
-            }
-            .print-image {
-              width: 100%;
-              height: auto;
-              image-rendering: pixelated;
-              image-rendering: -moz-crisp-edges;
-              image-rendering: crisp-edges;
-            }
-            .print-footer {
-              text-align: center;
-              font-size: 12px;
-              margin-top: 10px;
-              padding: 5px;
-            }
-            @media print {
-              body { margin: 0; }
-              .print-container { width: 58mm; }
-              .print-image { width: 100%; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="print-container">
-            <img src="${dataURL}" alt="Morobooth Photo" class="print-image" />
-            <div class="print-footer">
-              MOROBOOTH<br/>
-              ${new Date().toLocaleDateString('id-ID')}
-            </div>
-          </div>
-        </body>
-        </html>
-      `;
 
-      printWindow.document.write(printHTML);
-      printWindow.document.close();
-      
-      // Wait for image to load then print
-      printWindow.onload = () => {
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-        }, 500);
-      };
+      // Print via Bluetooth
+      console.log('Starting Bluetooth print...');
+      const ok = await bluetoothPrinter.printImage(dataURL);
+      if (ok) {
+        console.log('Print successful');
+        alert('Berhasil mencetak!');
+      } else {
+        console.error('Print failed');
+        alert('Gagal mencetak. Coba lagi atau periksa koneksi printer');
+      }
       
     } catch (error) {
       console.error('Print failed:', error);
