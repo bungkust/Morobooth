@@ -91,46 +91,94 @@ export class NativeBLEPrinter {
       console.log('Connected, discovering services...');
       const peripheralInfo = await BleManager.retrieveServices(deviceId);
       
-      if (!peripheralInfo.services || peripheralInfo.services.length === 0) {
-        throw new Error('No services found on the device. This might not be a printer.');
+      console.log('peripheralInfo structure:', JSON.stringify(Object.keys(peripheralInfo)));
+      console.log('Has services:', !!peripheralInfo.services);
+      console.log('Has characteristics:', !!peripheralInfo.characteristics);
+      
+      // Check if characteristics are directly available (new API)
+      if (peripheralInfo.characteristics && peripheralInfo.characteristics.length > 0) {
+        console.log('Found characteristics directly in peripheralInfo:', peripheralInfo.characteristics.length);
+        
+        for (const char of peripheralInfo.characteristics) {
+          console.log('Checking characteristic:', char.characteristic, 'properties:', char.properties);
+          
+          if (char.properties?.Write || char.properties?.WriteWithoutResponse) {
+            console.log('Found writable characteristic:', char.characteristic);
+            
+            // Find the service UUID for this characteristic
+            let foundService: any = null;
+            if (peripheralInfo.services && peripheralInfo.services.length > 0) {
+              // Try to match characteristic to service by checking service UUID
+              for (const service of peripheralInfo.services) {
+                if (char.service === service.uuid || char.serviceUUID === service.uuid) {
+                  foundService = service;
+                  break;
+                }
+              }
+              // Fallback: use first service if no match found
+              if (!foundService) {
+                foundService = peripheralInfo.services[0];
+              }
+            }
+            
+            if (foundService) {
+              this.serviceUUID = foundService.uuid;
+            }
+            
+            this.characteristicUUID = char.characteristic;
+            this.characteristicProperties = char.properties;
+            
+            // MTU negotiation with proper error handling
+            try {
+              console.log('Requesting MTU...');
+              await BleManager.requestMTU(deviceId, 512);
+              // MTU request is async, wait a bit for it to complete
+              await new Promise(resolve => setTimeout(resolve, 500));
+              // Default to 512 if MTU negotiation succeeded
+              this.mtu = 509; // 512 - 3 bytes overhead
+              console.log('MTU negotiation succeeded, using MTU:', this.mtu);
+            } catch (e) {
+              console.log('MTU negotiation failed, using default MTU:', this.mtu);
+            }
+            
+            this.connectedDeviceId = deviceId;
+            console.log('Successfully connected to printer');
+            return true;
+          }
+        }
       }
       
-      // Dynamic UUID discovery
-      for (const service of peripheralInfo.services) {
-        try {
-          const characteristics = await BleManager.getCharacteristics(
-            deviceId,
-            service.uuid
-          );
-          
-          for (const char of characteristics) {
-            if (char.properties.Write || char.properties.WriteWithoutResponse) {
-              console.log('Found writable characteristic:', char.characteristic);
-              this.serviceUUID = service.uuid;
-              this.characteristicUUID = char.characteristic;
-              this.characteristicProperties = char.properties;
-              
-              // MTU negotiation with proper error handling
-              try {
-                console.log('Requesting MTU...');
-                await BleManager.requestMTU(deviceId, 512);
-                // MTU request is async, wait a bit for it to complete
-                await new Promise(resolve => setTimeout(resolve, 500));
-                // Default to 512 if MTU negotiation succeeded
-                this.mtu = 509; // 512 - 3 bytes overhead
-                console.log('MTU negotiation succeeded, using MTU:', this.mtu);
-              } catch (e) {
-                console.log('MTU negotiation failed, using default MTU:', this.mtu);
+      // Fallback: Old API with services (should not reach here in v11.5.0)
+      if (peripheralInfo.services && peripheralInfo.services.length > 0) {
+        console.log('Trying old API with services:', peripheralInfo.services.length);
+        for (const service of peripheralInfo.services) {
+          console.log('Service UUID:', service.uuid);
+          // In old API, service should have characteristics
+          if (service.characteristics && service.characteristics.length > 0) {
+            for (const char of service.characteristics) {
+              if (char.properties?.Write || char.properties?.WriteWithoutResponse) {
+                console.log('Found writable characteristic:', char.characteristic);
+                this.serviceUUID = service.uuid;
+                this.characteristicUUID = char.characteristic;
+                this.characteristicProperties = char.properties;
+                
+                // MTU negotiation
+                try {
+                  console.log('Requesting MTU...');
+                  await BleManager.requestMTU(deviceId, 512);
+                  await new Promise(resolve => setTimeout(resolve, 500));
+                  this.mtu = 509;
+                  console.log('MTU negotiation succeeded, using MTU:', this.mtu);
+                } catch (e) {
+                  console.log('MTU negotiation failed, using default MTU:', this.mtu);
+                }
+                
+                this.connectedDeviceId = deviceId;
+                console.log('Successfully connected to printer');
+                return true;
               }
-              
-              this.connectedDeviceId = deviceId;
-              console.log('Successfully connected to printer');
-              return true;
             }
           }
-        } catch (e) {
-          console.log('Error getting characteristics:', e);
-          continue;
         }
       }
       
