@@ -77,13 +77,19 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     const printerInstance = getHybridBluetoothPrinterService();
     setBluetoothPrinter(printerInstance);
     
-    // Check current connection status on mount
-    console.log('PhotoBoothApp: Checking initial Bluetooth connection status...');
-    const currentlyConnected = printerInstance.getIsConnected();
-    console.log('PhotoBoothApp: Current connection status:', currentlyConnected);
-    if (currentlyConnected) {
-      setIsBluetoothConnected(true);
-      console.log('PhotoBoothApp: Bluetooth already connected on mount');
+    // Request initial printer status from native
+    if (nativeBridge.isNativeApp() && nativeBridge.hasNativeBluetooth()) {
+      console.log('PhotoBoothApp: Requesting initial printer status from native...');
+      nativeBridge.sendMessage('GET_PRINTER_STATUS');
+    } else {
+      // Web environment - check singleton status
+      console.log('PhotoBoothApp: Checking initial Bluetooth connection status...');
+      const currentlyConnected = printerInstance.getIsConnected();
+      console.log('PhotoBoothApp: Current connection status:', currentlyConnected);
+      if (currentlyConnected) {
+        setIsBluetoothConnected(true);
+        console.log('PhotoBoothApp: Bluetooth already connected on mount');
+      }
     }
     
     // Listen for print progress

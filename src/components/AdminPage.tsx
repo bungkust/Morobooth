@@ -102,12 +102,29 @@ export const AdminPage = () => {
     console.log('AdminPage: printerInstance.isNativeEnvironment() =', printerInstance.isNativeEnvironment());
     setBluetoothPrinter(printerInstance);
     
+    // Request initial printer status from native
+    if (nativeBridge.isNativeApp() && nativeBridge.hasNativeBluetooth()) {
+      console.log('AdminPage: Requesting initial printer status from native...');
+      nativeBridge.sendMessage('GET_PRINTER_STATUS');
+    } else {
+      // Web environment - check singleton status
+      const currentlyConnected = printerInstance.getIsConnected();
+      console.log('AdminPage: Current connection status:', currentlyConnected);
+      if (currentlyConnected) {
+        setIsBluetoothConnected(true);
+        console.log('AdminPage: Bluetooth already connected on mount');
+      }
+    }
+    
     // Listen for Bluetooth status changes
     const statusHandler = (event: any) => {
+      console.log('AdminPage: Received bluetoothStatusChange event:', event.detail);
       setIsBluetoothConnected(event.detail.connected);
       setPrinterInfo(event.detail.info);
       if (event.detail.connected) {
         console.log('Bluetooth connected:', event.detail.info);
+      } else {
+        console.log('Bluetooth disconnected');
       }
     };
     window.addEventListener('bluetoothStatusChange', statusHandler);
