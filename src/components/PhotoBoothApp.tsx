@@ -85,6 +85,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     
     // Listen for Bluetooth status changes
     const statusHandler = (event: any) => {
+      console.log('PhotoBoothApp: Received bluetoothStatusChange event:', event.detail);
       setIsBluetoothConnected(event.detail.connected);
       if (event.detail.connected) {
         console.log('Bluetooth connected:', event.detail.info);
@@ -200,6 +201,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       }
 
       // Check if printer is connected
+      console.log('Print check - bluetoothPrinter:', !!bluetoothPrinter);
+      console.log('Print check - isBluetoothConnected:', isBluetoothConnected);
       if (!bluetoothPrinter || !isBluetoothConnected) {
         alert('Silahkan connect printer di halaman admin terlebih dahulu');
         return;
