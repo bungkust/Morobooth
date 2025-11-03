@@ -506,12 +506,18 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       }
     },
     downloadComposite: () => {
+      console.log('downloadComposite called');
+      console.log('p5InstanceRef.current:', !!p5InstanceRef.current);
+      console.log('finalCompositeHighResRef.current:', !!finalCompositeHighResRef.current);
       if (p5InstanceRef.current && finalCompositeHighResRef.current) {
         const timestamp = new Date().toISOString()
           .replace(/[-:.]/g, '')
           .substring(0, 15);
         const filename = `booth-${timestamp}.png`;
+        console.log('Saving file:', filename);
         p5InstanceRef.current.save(finalCompositeHighResRef.current, filename);
+      } else {
+        console.error('Cannot download: missing p5Instance or finalComposite');
       }
     },
     getFinalCompositeDataURL: () => {

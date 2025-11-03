@@ -175,8 +175,12 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   };
 
   const handleDownload = () => {
+    console.log('Download button clicked');
     if (photoBoothRef.current) {
+      console.log('Calling downloadComposite');
       photoBoothRef.current.downloadComposite();
+    } else {
+      console.error('photoBoothRef.current is null');
     }
   };
 
