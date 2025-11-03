@@ -203,14 +203,9 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
 
       // Print via Bluetooth
       console.log('Starting Bluetooth print...');
-      const ok = await bluetoothPrinter.printImage(dataURL);
-      if (ok) {
-        console.log('Print successful');
-        alert('Berhasil mencetak!');
-      } else {
-        console.error('Print failed');
-        alert('Gagal mencetak. Coba lagi atau periksa koneksi printer');
-      }
+      await bluetoothPrinter.printImage(dataURL);
+      console.log('Print command sent');
+      // Note: Actual print result will come via PRINT_SUCCESS event
       
     } catch (error) {
       console.error('Print failed:', error);
