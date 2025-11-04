@@ -330,7 +330,7 @@ export const AdminPage = () => {
       // Generate test image - simple white background with black text
       const canvas = document.createElement('canvas');
       canvas.width = 384; // Standard 58mm thermal printer width
-      canvas.height = 400;
+      canvas.height = 300;
       const ctx = canvas.getContext('2d');
       
       if (!ctx) {
@@ -341,33 +341,38 @@ export const AdminPage = () => {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Black text
+      // Black text - simple and clear
       ctx.fillStyle = '#000000';
-      ctx.font = 'bold 32px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText('TEST PRINT', canvas.width / 2, 80);
       
-      ctx.font = '24px Arial';
-      ctx.fillText('Morobooth', canvas.width / 2, 140);
-      ctx.fillText('Bluetooth Test', canvas.width / 2, 180);
-
-      // Draw some lines
+      // Title
+      ctx.font = 'bold 40px Arial';
+      ctx.fillText('MOROBOOTH', canvas.width / 2, 60);
+      
+      // Subtitle
+      ctx.font = 'bold 32px Arial';
+      ctx.fillText('TEST PRINT', canvas.width / 2, 110);
+      
+      // Separator line
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.moveTo(50, 220);
-      ctx.lineTo(canvas.width - 50, 220);
+      ctx.moveTo(40, 140);
+      ctx.lineTo(canvas.width - 40, 140);
       ctx.stroke();
 
-      ctx.beginPath();
-      ctx.moveTo(50, 240);
-      ctx.lineTo(canvas.width - 50, 240);
-      ctx.stroke();
-
-      // QR placeholder text
-      ctx.font = '18px Arial';
-      ctx.fillText('If you see this,', canvas.width / 2, 300);
-      ctx.fillText('printer is working!', canvas.width / 2, 330);
+      // Info text
+      ctx.font = '24px Arial';
+      ctx.fillText('Printer Test', canvas.width / 2, 180);
+      ctx.fillText('Success!', canvas.width / 2, 220);
+      
+      // Date/time
+      ctx.font = '20px Arial';
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('id-ID');
+      const timeStr = now.toLocaleTimeString('id-ID');
+      ctx.fillText(dateStr, canvas.width / 2, 260);
+      ctx.fillText(timeStr, canvas.width / 2, 285);
 
       // Convert to data URL
       const testImageDataURL = canvas.toDataURL('image/png');
