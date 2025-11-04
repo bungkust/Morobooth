@@ -50,6 +50,7 @@ export const AdminPage = () => {
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
   const [bluetoothError, setBluetoothError] = useState<string>('');
   const [printerInfo, setPrinterInfo] = useState<any>(null);
+  const [testPrintLoading, setTestPrintLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -289,6 +290,80 @@ export const AdminPage = () => {
       setIsBluetoothConnected(false);
       setPrinterInfo(null);
       setBluetoothError('');
+    }
+  };
+
+  const handleTestPrint = async () => {
+    if (!bluetoothPrinter || !isBluetoothConnected) {
+      alert('Printer tidak terhubung. Silakan connect printer terlebih dahulu.');
+      return;
+    }
+
+    setTestPrintLoading(true);
+    setBluetoothError('');
+
+    try {
+      // Generate test image - simple white background with black text
+      const canvas = document.createElement('canvas');
+      canvas.width = 384; // Standard 58mm thermal printer width
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error('Failed to create canvas context');
+      }
+
+      // White background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Black text
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 32px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('TEST PRINT', canvas.width / 2, 80);
+      
+      ctx.font = '24px Arial';
+      ctx.fillText('Morobooth', canvas.width / 2, 140);
+      ctx.fillText('Bluetooth Test', canvas.width / 2, 180);
+
+      // Draw some lines
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(50, 220);
+      ctx.lineTo(canvas.width - 50, 220);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(50, 240);
+      ctx.lineTo(canvas.width - 50, 240);
+      ctx.stroke();
+
+      // QR placeholder text
+      ctx.font = '18px Arial';
+      ctx.fillText('If you see this,', canvas.width / 2, 300);
+      ctx.fillText('printer is working!', canvas.width / 2, 330);
+
+      // Convert to data URL
+      const testImageDataURL = canvas.toDataURL('image/png');
+
+      // Print via Bluetooth
+      console.log('Test print: Sending test image to printer...');
+      const success = await bluetoothPrinter.printImage(testImageDataURL, 384);
+      
+      if (success) {
+        alert('Test print berhasil dikirim! Cek printer Anda.');
+      } else {
+        throw new Error('Print gagal');
+      }
+    } catch (error) {
+      console.error('Test print error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setBluetoothError('Test print gagal: ' + errorMsg);
+      alert('Test print gagal: ' + errorMsg);
+    } finally {
+      setTestPrintLoading(false);
     }
   };
 
@@ -597,12 +672,23 @@ export const AdminPage = () => {
                         )}
                       </div>
                     )}
-                    <button 
-                      onClick={handleDisconnectBluetooth} 
-                      className="danger-btn disconnect-btn"
-                    >
-                      Disconnect
-                    </button>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
+                      <button 
+                        onClick={handleTestPrint}
+                        disabled={testPrintLoading}
+                        className="primary-btn"
+                        style={{ width: '100%' }}
+                      >
+                        {testPrintLoading ? 'Printing...' : '🖨️ Test Print'}
+                      </button>
+                      <button 
+                        onClick={handleDisconnectBluetooth} 
+                        className="danger-btn disconnect-btn"
+                        style={{ width: '100%' }}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

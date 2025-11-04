@@ -224,7 +224,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         alert('Silahkan connect printer di halaman admin terlebih dahulu');
         return;
       }
-
+      
       // Print via Bluetooth
       console.log('Starting Bluetooth print...');
       await bluetoothPrinter.printImage(dataURL);
@@ -295,8 +295,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         <div className="print-progress">
           <div className="progress-bar" style={{ width: `${printProgress.progress}%` }} />
           <span>{printProgress.status}...</span>
-        </div>
-      )}
+          </div>
+        )}
       
       <div onClick={handleCanvasClick}>
         <PhotoBooth
