@@ -143,6 +143,7 @@ jobs:
 
       - name: Build APK with Gradle
         working-directory: ./apps/mobile/android
+        id: build
         env:
           EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || 'https://morobooth.netlify.app' }}
           NODE_ENV: "production"
@@ -251,4 +252,69 @@ jobs:
           name: morobooth-v${{ steps.version.outputs.version }}-${{ inputs.buildType }}
           path: output/${{ steps.version.outputs.APK_NAME }}.apk
           retention-days: 30
+
+  notify:
+    needs: build-android
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Send email on success
+        if: needs.build-android.result == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
+          server_port: ${{ secrets.EMAIL_SMTP_PORT || 465 }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Android APK Build Success - Morobooth"
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ secrets.EMAIL_FROM || secrets.EMAIL_USERNAME }}
+          body: |
+            ✅ Build Android APK Berhasil!
+            
+            Detail Build:
+            - Workflow: ${{ github.workflow }}
+            - Build Type: ${{ github.event.inputs.buildType }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+            - Actor: ${{ github.actor }}
+            - WebView URL: ${{ github.event.inputs.webviewUrl || 'https://morobooth.netlify.app' }}
+            
+            APK File:
+            APK telah berhasil dibuat dan diupload sebagai artifact.
+            Anda dapat mendownload APK dari:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Send email on failure
+        if: needs.build-android.result == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
+          server_port: ${{ secrets.EMAIL_SMTP_PORT || 465 }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Android APK Build Failed - Morobooth"
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ secrets.EMAIL_FROM || secrets.EMAIL_USERNAME }}
+          body: |
+            ❌ Build Android APK Gagal!
+            
+            Detail Build:
+            - Workflow: ${{ github.workflow }}
+            - Build Type: ${{ github.event.inputs.buildType }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+            - Actor: ${{ github.actor }}
+            - WebView URL: ${{ github.event.inputs.webviewUrl || 'https://morobooth.netlify.app' }}
+            
+            Error Details:
+            Silakan cek log build untuk detail error lebih lengkap.
+            
+            View Build Logs on GitHub:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
