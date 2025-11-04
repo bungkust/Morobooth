@@ -114,6 +114,17 @@ export class HybridBluetoothPrinterService {
     this.printerInfo = null;
   }
 
+  async printText(text: string): Promise<boolean> {
+    if (this.isNative) {
+      nativeBridge.sendMessage('PRINT_TEXT', { text });
+      return true;
+    } else {
+      // Web Bluetooth - could implement text printing here if needed
+      console.warn('Text printing not fully supported in Web Bluetooth');
+      return false;
+    }
+  }
+
   async printImage(imageDataURL: string, width: number = 384): Promise<boolean> {
     if (this.isNative) {
       // Convert image to 1-bit dithered bitmap

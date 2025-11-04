@@ -211,6 +211,64 @@ export class NativeBLEPrinter {
    * Print pre-dithered 1-bit bitmap from PWA
    * Input: base64 string of 1-bit bitmap (0=white, 1=black)
    */
+  async printText(text: string): Promise<boolean> {
+    if (!this.connectedDeviceId) {
+      throw new Error('No printer connected');
+    }
+
+    try {
+      const commands: number[] = [];
+      
+      // ESC @ - Initialize printer
+      commands.push(0x1B, 0x40);
+      
+      // ESC a 1 - Center alignment
+      commands.push(0x1B, 0x61, 0x01);
+      
+      // ESC ! 0 - Normal size (0x08 = double height, 0x10 = double width, 0x18 = double both)
+      commands.push(0x1B, 0x21, 0x00);
+      
+      // Convert text to bytes (UTF-8)
+      const textBytes = Buffer.from(text, 'utf8');
+      commands.push(...Array.from(textBytes));
+      
+      // Line feed
+      commands.push(0x0A);
+      
+      // Feed paper
+      commands.push(0x0A, 0x0A);
+      
+      // Cut paper (GS V 0)
+      commands.push(0x1D, 0x56, 0x00);
+      
+      // Send in chunks
+      const chunkSize = this.mtu;
+      const commandArray = new Uint8Array(commands);
+      
+      for (let i = 0; i < commandArray.length; i += chunkSize) {
+        const chunk = commandArray.slice(i, i + chunkSize);
+        
+        const writeMethod = this.characteristicProperties?.WriteWithoutResponse
+          ? 'writeWithoutResponse'
+          : 'write';
+        
+        await BleManager[writeMethod](
+          this.connectedDeviceId,
+          this.serviceUUID,
+          this.characteristicUUID,
+          Array.from(chunk)
+        );
+        
+        await new Promise(r => setTimeout(r, 20));
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Print text error:', error);
+      throw error;
+    }
+  }
+
   async printDitheredBitmap(
     bitmapBase64: string,
     width: number,
