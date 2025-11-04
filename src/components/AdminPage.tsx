@@ -696,27 +696,21 @@ export const AdminPage = () => {
                         )}
                       </div>
                     )}
-                    <div className="bluetooth-actions" style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
-                      <button 
-                        onClick={handleTestPrint}
-                        disabled={testPrintLoading || !isBluetoothConnected}
-                        className="primary-btn test-print-btn"
-                        style={{ 
-                          width: '100%',
-                          padding: '15px',
-                          fontSize: '18px',
-                          fontWeight: 'bold',
-                          cursor: testPrintLoading || !isBluetoothConnected ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {testPrintLoading ? '🔄 Printing Test...' : '🖨️ Print Test'}
-                      </button>
+                    <div className="bluetooth-actions" style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column', width: '100%' }}>
                       <button 
                         onClick={handleDisconnectBluetooth} 
                         className="danger-btn disconnect-btn"
                         style={{ width: '100%' }}
                       >
                         Disconnect Printer
+                      </button>
+                      <button 
+                        onClick={handleTestPrint}
+                        disabled={testPrintLoading}
+                        className="primary-btn"
+                        style={{ width: '100%' }}
+                      >
+                        {testPrintLoading ? '🔄 Printing Test...' : '🖨️ Print Test'}
                       </button>
                     </div>
                   </div>
