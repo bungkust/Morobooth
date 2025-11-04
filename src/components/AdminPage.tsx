@@ -120,20 +120,35 @@ export const AdminPage = () => {
     // Listen for Bluetooth status changes
     const statusHandler = (event: any) => {
       console.log('AdminPage: Received bluetoothStatusChange event:', event.detail);
-      setIsBluetoothConnected(event.detail.connected);
-      setPrinterInfo(event.detail.info);
-      if (event.detail.connected) {
-        console.log('Bluetooth connected:', event.detail.info);
+      const connected = event.detail.connected === true;
+      setIsBluetoothConnected(connected);
+      setPrinterInfo(event.detail.info || null);
+      if (connected) {
+        console.log('AdminPage: Bluetooth connected - showing test print button');
+        console.log('AdminPage: Printer info:', event.detail.info);
       } else {
-        console.log('Bluetooth disconnected');
+        console.log('AdminPage: Bluetooth disconnected');
       }
     };
     window.addEventListener('bluetoothStatusChange', statusHandler);
     
+    // Also check initial status periodically in case event doesn't fire
+    const checkStatus = setInterval(() => {
+      if (bluetoothPrinter) {
+        const connected = bluetoothPrinter.getIsConnected();
+        if (connected && !isBluetoothConnected) {
+          console.log('AdminPage: Detected connection via status check');
+          setIsBluetoothConnected(true);
+          setPrinterInfo(bluetoothPrinter.getPrinterInfo());
+        }
+      }
+    }, 1000);
+    
     return () => {
       window.removeEventListener('bluetoothStatusChange', statusHandler);
+      clearInterval(checkStatus);
     };
-  }, []);
+  }, [bluetoothPrinter, isBluetoothConnected]);
 
   const handleLogin = useCallback(() => {
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -259,6 +274,14 @@ export const AdminPage = () => {
       if (bluetoothPrinter.isNativeEnvironment()) {
         await bluetoothPrinter.connect();
         // State will be updated via bluetoothStatusChange event
+        // Give it a moment for the event to fire, then check status
+        setTimeout(() => {
+          const isConnected = bluetoothPrinter?.getIsConnected();
+          if (isConnected) {
+            setIsBluetoothConnected(true);
+            setPrinterInfo(bluetoothPrinter?.getPrinterInfo());
+          }
+        }, 500);
       } else {
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
@@ -269,8 +292,9 @@ export const AdminPage = () => {
         const connected = await bluetoothPrinter.connect();
         if (connected) {
           setIsBluetoothConnected(true);
-          setPrinterInfo(bluetoothPrinter.getPrinterInfo());
-          alert(`Connected to ${bluetoothPrinter.getPrinterInfo()?.name || 'Printer'}`);
+          const info = bluetoothPrinter.getPrinterInfo();
+          setPrinterInfo(info);
+          alert(`Connected to ${info?.name || 'Printer'}`);
         } else {
           setBluetoothError('Failed to connect to printer');
         }
@@ -657,7 +681,7 @@ export const AdminPage = () => {
                 ) : (
                   <div className="bluetooth-connected">
                     <div className="bluetooth-icon connected">✓</div>
-                    <p className="bluetooth-status-text">Printer connected</p>
+                    <p className="bluetooth-status-text connected-text">Printer Connected Successfully!</p>
                     {printerInfo && (
                       <div className="printer-details">
                         <div className="info-row">
@@ -672,21 +696,27 @@ export const AdminPage = () => {
                         )}
                       </div>
                     )}
-                    <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
+                    <div className="bluetooth-actions" style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column' }}>
                       <button 
                         onClick={handleTestPrint}
-                        disabled={testPrintLoading}
-                        className="primary-btn"
-                        style={{ width: '100%' }}
+                        disabled={testPrintLoading || !isBluetoothConnected}
+                        className="primary-btn test-print-btn"
+                        style={{ 
+                          width: '100%',
+                          padding: '15px',
+                          fontSize: '18px',
+                          fontWeight: 'bold',
+                          cursor: testPrintLoading || !isBluetoothConnected ? 'not-allowed' : 'pointer'
+                        }}
                       >
-                        {testPrintLoading ? 'Printing...' : '🖨️ Test Print'}
+                        {testPrintLoading ? '🔄 Printing Test...' : '🖨️ Print Test'}
                       </button>
                       <button 
                         onClick={handleDisconnectBluetooth} 
                         className="danger-btn disconnect-btn"
                         style={{ width: '100%' }}
                       >
-                        Disconnect
+                        Disconnect Printer
                       </button>
                     </div>
                   </div>
