@@ -15,30 +15,69 @@ jobs:
         run: |
           echo "🔄 Starting Supabase health check..."
           
+          # Validasi environment variables
+          if [ -z "$SUPABASE_URL" ] || [ "$SUPABASE_URL" = "" ]; then
+            echo "❌ Error: SUPABASE_URL is not set"
+            echo "Please set SUPABASE_URL or VITE_SUPABASE_URL in GitHub Secrets"
+            exit 1
+          fi
+          
+          if [ -z "$SUPABASE_ANON_KEY" ] || [ "$SUPABASE_ANON_KEY" = "" ]; then
+            echo "❌ Error: SUPABASE_ANON_KEY is not set"
+            echo "Please set SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY in GitHub Secrets"
+            exit 1
+          fi
+          
+          echo "✅ Environment variables validated"
+          # Show URL prefix only (safe substring)
+          URL_PREFIX=$(echo "$SUPABASE_URL" | cut -c1-30)
+          echo "Supabase URL: ${URL_PREFIX}..."
+          
           # Health check dengan query sederhana ke tabel sessions
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
+          # Menggunakan format yang lebih reliable dengan error handling
+          set +e  # Don't exit on error for curl
+          
+          # Buat request ke Supabase
+          # Query sederhana ke tabel sessions untuk keep-alive
+          curl -s -o /tmp/response.txt -w "%{http_code}" \
             -X GET \
-            "${SUPABASE_URL}/rest/v1/sessions?select=count&limit=1" \
+            "${SUPABASE_URL}/rest/v1/sessions?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             -H "Content-Type: application/json" \
-            -H "Prefer: count=exact")
+            > /tmp/http_code.txt 2>/tmp/curl_error.txt
           
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n-1)
+          CURL_EXIT=$?
+          HTTP_CODE=$(cat /tmp/http_code.txt 2>/dev/null | tr -d '\n' || echo "000")
+          BODY=$(cat /tmp/response.txt 2>/dev/null || echo "")
+          CURL_ERROR=$(cat /tmp/curl_error.txt 2>/dev/null || echo "")
           
-          if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 206 ]; then
-            echo "✅ Health check berhasil! Database aktif."
-            echo "Response: $BODY"
-            echo "Status Code: $HTTP_CODE"
-          else
-            echo "❌ Health check gagal dengan status: $HTTP_CODE"
-            echo "Response: $BODY"
-            # Jangan exit 1 agar tidak fail workflow jika ada masalah sementara
-            echo "⚠️ Warning: Health check returned non-200 status, but continuing..."
+          echo "HTTP Status Code: $HTTP_CODE"
+          if [ -n "$BODY" ]; then
+            echo "Response preview: ${BODY:0:200}"
+          fi
+          if [ -n "$CURL_ERROR" ]; then
+            echo "Curl stderr: $CURL_ERROR"
           fi
           
-          echo "✅ Keep-alive process completed"
+          set -e  # Re-enable exit on error
+          
+          # Untuk keep-alive, yang penting adalah ada aktivitas ke database
+          # Jadi kita anggap sukses selama ada request (meskipun error)
+          if [ "$CURL_EXIT" -eq 0 ] && { [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "206" ]; }; then
+            echo "✅ Health check berhasil! Database aktif."
+            exit 0
+          elif [ "$CURL_EXIT" -eq 0 ]; then
+            echo "⚠️ Warning: Health check returned status $HTTP_CODE"
+            echo "✅ But keep-alive purpose achieved - database was accessed"
+            exit 0
+          else
+            echo "⚠️ Warning: curl command failed with exit code $CURL_EXIT"
+            echo "⚠️ This might indicate a configuration issue"
+            echo "Please check your SUPABASE_URL and SUPABASE_ANON_KEY secrets"
+            # Exit 0 untuk keep-alive, tapi log warning
+            exit 0
+          fi
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
