@@ -17,7 +17,7 @@ import {
   clearConfigCache,
   type ConfigOverride 
 } from '../services/configService';
-import { getHybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
+import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 
 export const AdminPage = () => {
