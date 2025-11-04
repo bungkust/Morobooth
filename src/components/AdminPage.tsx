@@ -327,58 +327,94 @@ export const AdminPage = () => {
     setBluetoothError('');
 
     try {
-      // Generate test image - simple white background with black text
+      // Generate test image - optimized for thermal printer
+      // Thermal printers need high contrast black/white images
       const canvas = document.createElement('canvas');
-      canvas.width = 384; // Standard 58mm thermal printer width
-      canvas.height = 300;
-      const ctx = canvas.getContext('2d');
+      canvas.width = 384; // Standard 58mm thermal printer width (384px)
+      canvas.height = 400;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       
       if (!ctx) {
         throw new Error('Failed to create canvas context');
       }
 
-      // White background
+      // White background (pure white for thermal)
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Black text - simple and clear
+      // Pure black text (no anti-aliasing for thermal printer clarity)
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
       
-      // Title
-      ctx.font = 'bold 40px Arial';
-      ctx.fillText('MOROBOOTH', canvas.width / 2, 60);
+      // Disable anti-aliasing for crisp text on thermal printer
+      ctx.imageSmoothingEnabled = false;
       
-      // Subtitle
-      ctx.font = 'bold 32px Arial';
-      ctx.fillText('TEST PRINT', canvas.width / 2, 110);
+      // Title - Large bold text
+      ctx.font = 'bold 48px Arial';
+      ctx.fillText('MOROBOOTH', canvas.width / 2, 30);
       
-      // Separator line
+      // Subtitle - Bold
+      ctx.font = 'bold 36px Arial';
+      ctx.fillText('TEST PRINT', canvas.width / 2, 90);
+      
+      // Separator line - thick
       ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.moveTo(40, 140);
-      ctx.lineTo(canvas.width - 40, 140);
+      ctx.moveTo(30, 145);
+      ctx.lineTo(canvas.width - 30, 145);
       ctx.stroke();
 
-      // Info text
-      ctx.font = '24px Arial';
-      ctx.fillText('Printer Test', canvas.width / 2, 180);
-      ctx.fillText('Success!', canvas.width / 2, 220);
+      // Info text - medium size
+      ctx.font = 'bold 28px Arial';
+      ctx.fillText('Printer Test', canvas.width / 2, 170);
+      ctx.fillText('Success!', canvas.width / 2, 210);
       
-      // Date/time
-      ctx.font = '20px Arial';
+      // Date/time - readable size
+      ctx.font = 'bold 24px Arial';
       const now = new Date();
       const dateStr = now.toLocaleDateString('id-ID');
-      const timeStr = now.toLocaleTimeString('id-ID');
+      const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
       ctx.fillText(dateStr, canvas.width / 2, 260);
-      ctx.fillText(timeStr, canvas.width / 2, 285);
+      ctx.fillText(timeStr, canvas.width / 2, 295);
+      
+      // Additional separator
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(30, 340);
+      ctx.lineTo(canvas.width - 30, 340);
+      ctx.stroke();
+      
+      // Footer text
+      ctx.font = 'bold 22px Arial';
+      ctx.fillText('Thermal Printer OK', canvas.width / 2, 360);
+
+      // Force pure black/white for thermal printer (no grayscale)
+      // Thermal printers work best with pure black (0) or white (255)
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < imageData.data.length; i += 4) {
+        const r = imageData.data[i];
+        const g = imageData.data[i + 1];
+        const b = imageData.data[i + 2];
+        // Convert to grayscale
+        const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+        // Force pure black or white - threshold 150 untuk memastikan text terlihat
+        const value = gray < 150 ? 0 : 255; // Pure black or white only
+        imageData.data[i] = value;     // R
+        imageData.data[i + 1] = value; // G
+        imageData.data[i + 2] = value; // B
+        imageData.data[i + 3] = 255;   // Alpha (fully opaque)
+      }
+      ctx.putImageData(imageData, 0, 0);
 
       // Convert to data URL
       const testImageDataURL = canvas.toDataURL('image/png');
 
       // Print via Bluetooth
       console.log('Test print: Sending test image to printer...');
+      console.log('Test print: Image dimensions:', canvas.width, 'x', canvas.height);
       const success = await bluetoothPrinter.printImage(testImageDataURL, 384);
       
       if (success) {
