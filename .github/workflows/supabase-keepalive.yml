@@ -1,0 +1,45 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # Jalankan setiap hari jam 00:00 UTC (07:00 WIB)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Untuk manual trigger dari GitHub UI
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Keep Supabase Database Alive
+        run: |
+          echo "🔄 Starting Supabase health check..."
+          
+          # Health check dengan query sederhana ke tabel sessions
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X GET \
+            "${SUPABASE_URL}/rest/v1/sessions?select=count&limit=1" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: count=exact")
+          
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          
+          if [ "$HTTP_CODE" -eq 200 ] || [ "$HTTP_CODE" -eq 206 ]; then
+            echo "✅ Health check berhasil! Database aktif."
+            echo "Response: $BODY"
+            echo "Status Code: $HTTP_CODE"
+          else
+            echo "❌ Health check gagal dengan status: $HTTP_CODE"
+            echo "Response: $BODY"
+            # Jangan exit 1 agar tidak fail workflow jika ada masalah sementara
+            echo "⚠️ Warning: Health check returned non-200 status, but continuing..."
+          fi
+          
+          echo "✅ Keep-alive process completed"
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
+
