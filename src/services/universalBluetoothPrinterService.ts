@@ -236,7 +236,7 @@ export class UniversalBluetoothPrinterService {
               // Alpha stays the same
             }
             
-            const bitmap = this.imageDataToEscPosBitmap(imageData, config);
+            const bitmap = this.imageDataToEscPosBitmap(imageData);
             resolve(bitmap);
           } catch (error) {
             reject(error instanceof Error ? error : new Error('Failed to process image'));
@@ -259,29 +259,43 @@ export class UniversalBluetoothPrinterService {
     ]);
   }
 
-  private imageDataToEscPosBitmap(imageData: ImageData, config: PrinterConfig): string {
+  private imageDataToEscPosBitmap(imageData: ImageData): string {
     const { data, width, height } = imageData;
     let out = '';
+    
+    // Process in 8-dot rows (vertical bit packing)
     for (let y = 0; y < height; y += 8) {
-      out += config.commands.image; // ESC * 0
-      out += String.fromCharCode(width & 0xff);
-      out += String.fromCharCode((width >> 8) & 0xff);
+      // ESC * m nL nH - m=0 (8-dot single density), n=width in dots
+      out += '\x1B\x2A\x00'; // ESC * 0 (8-dot single density, normal)
+      const nL = width & 0xFF;
+      const nH = (width >> 8) & 0xFF;
+      out += String.fromCharCode(nL);
+      out += String.fromCharCode(nH);
+      
+      // Build bitmap bytes column by column (vertical bit packing)
       for (let x = 0; x < width; x++) {
         let byte = 0;
+        // Vertical bit packing: 8 pixels per byte, top to bottom
+        // MSB first: bit 7 = top pixel (y), bit 0 = bottom pixel (y+7)
         for (let bit = 0; bit < 8; bit++) {
-          const yy = y + bit;
-          if (yy >= height) continue;
-          const idx = (yy * width + x) * 4;
-          // Since we already forced pure black/white in convertToThermalFormat,
-          // R, G, B are all the same. Just check if it's black (value < 128)
-          const gray = data[idx]; // R, G, B are all the same after forced conversion
-          if (gray < 128) {
-            byte |= 1 << (7 - bit); // Set bit for black pixel
+          const pixelY = y + bit;
+          if (pixelY < height) {
+            const idx = (pixelY * width + x) * 4;
+            // Since we already forced pure black/white in convertToThermalFormat,
+            // R, G, B are all the same. Just check if it's black (value < 128)
+            const gray = data[idx]; // R channel (already pure black/white)
+            // Black pixel = 1, White pixel = 0
+            if (gray < 128) { // Black pixel
+              byte |= (1 << (7 - bit)); // Set bit for black pixel (MSB first)
+            }
           }
         }
         out += String.fromCharCode(byte);
       }
+      // Add line feed after each row (required for some printers)
+      out += '\x0A';
     }
+    
     return out;
   }
 

@@ -272,24 +272,31 @@ export class NativeBLEPrinter {
     // ESC a 1 - Center alignment
     commands.push(0x1B, 0x61, 0x01);
     
-    // Process in 8-dot rows (ESC * 33 for 8-dot single density)
+    // Process in 8-dot rows - Use mode 0 (8-dot single density, normal) for better compatibility
     for (let y = 0; y < height; y += 8) {
-      commands.push(0x1B, 0x2A, 0x21); // ESC * 33
-      commands.push(width & 0xFF, (width >> 8) & 0xFF);
+      // ESC * m nL nH - m=0 (8-dot single density), n=width in dots
+      commands.push(0x1B, 0x2A, 0x00); // ESC * 0 (8-dot single density, normal)
+      const nL = width & 0xFF;
+      const nH = (width >> 8) & 0xFF;
+      commands.push(nL, nH);
       
+      // Build bitmap bytes column by column (vertical bit packing)
       for (let x = 0; x < width; x++) {
         let byte = 0;
+        // Vertical bit packing: 8 pixels per byte, top to bottom
+        // MSB first: bit 7 = top pixel (y), bit 0 = bottom pixel (y+7)
         for (let bit = 0; bit < 8; bit++) {
           const pixelY = y + bit;
           if (pixelY < height) {
             const pixelIndex = pixelY * width + x;
-            if (bitmap[pixelIndex] === 1) {
-              byte |= 1 << (7 - bit);
+            if (bitmap[pixelIndex] === 1) { // Black pixel
+              byte |= 1 << (7 - bit); // Set bit for black pixel (MSB first)
             }
           }
         }
         commands.push(byte);
       }
+      // Add line feed after each row (required for some printers)
       commands.push(0x0A); // LF
     }
     
