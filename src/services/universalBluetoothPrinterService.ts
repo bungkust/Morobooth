@@ -243,7 +243,7 @@ export class UniversalBluetoothPrinterService {
           }
         };
         
-        img.onerror = (error) => {
+        img.onerror = () => {
           if (resolved) return; // Prevent multiple calls
           resolved = true;
           reject(new Error('Failed to load image'));

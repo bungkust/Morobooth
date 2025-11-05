@@ -259,6 +259,15 @@ jobs:
     if: always()
     
     steps:
+      - name: Set email from address
+        id: email_from
+        run: |
+          if [ -n "${{ secrets.EMAIL_FROM }}" ]; then
+            echo "from=${{ secrets.EMAIL_FROM }}" >> $GITHUB_OUTPUT
+          else
+            echo "from=${{ secrets.EMAIL_USERNAME }}" >> $GITHUB_OUTPUT
+          fi
+      
       - name: Send email on success
         if: needs.build-android.result == 'success'
         uses: dawidd6/action-send-mail@v3
@@ -269,7 +278,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "✅ Android APK Build Success - Morobooth"
           to: ${{ secrets.EMAIL_RECIPIENT }}
-          from: ${{ secrets.EMAIL_FROM || secrets.EMAIL_USERNAME }}
+          from: ${{ steps.email_from.outputs.from }}
           body: |
             ✅ Build Android APK Berhasil!
             
@@ -298,7 +307,7 @@ jobs:
           password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "❌ Android APK Build Failed - Morobooth"
           to: ${{ secrets.EMAIL_RECIPIENT }}
-          from: ${{ secrets.EMAIL_FROM || secrets.EMAIL_USERNAME }}
+          from: ${{ steps.email_from.outputs.from }}
           body: |
             ❌ Build Android APK Gagal!
             
