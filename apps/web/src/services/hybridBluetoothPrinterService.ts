@@ -143,6 +143,9 @@ export class HybridBluetoothPrinterService {
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject(new Error('Canvas context not available'));
         
+        // CRITICAL: Disable image smoothing for thermal printer (preserve pure black/white)
+        ctx.imageSmoothingEnabled = false;
+        
         ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
         const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
         

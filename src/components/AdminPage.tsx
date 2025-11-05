@@ -327,30 +327,60 @@ export const AdminPage = () => {
     setBluetoothError('');
 
     try {
-      // Print text langsung - simple dan pasti keluar di thermal printer
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('id-ID');
-      const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+      // Load image from Supabase URL
+      const testImageUrl = 'https://aoxxjvnwwnedlxikyzds.supabase.co/storage/v1/object/sign/photos/SUNATAN-5KEJ-9-001.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV81N2MyNjM3ZS1hNWExLTQzMjEtYTQxNi1mMDVjMzc1OTBjYzIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwaG90b3MvU1VOQVRBTi01S0VKLTktMDAxLnBuZyIsImlhdCI6MTc2MjMwODg2MSwiZXhwIjoxNzkzODQ0ODYxfQ.VeVbnn7d0EokegZxNJG-6-60KK-MyZxnS1P_XBTMByE';
       
-      const testText = 
-        '\n' +
-        '========================\n' +
-        '    MOROBOOTH\n' +
-        '    TEST PRINT\n' +
-        '========================\n' +
-        '\n' +
-        'Printer Test\n' +
-        'Success!\n' +
-        '\n' +
-        `${dateStr}\n` +
-        `${timeStr}\n` +
-        '\n' +
-        'Thermal Printer OK\n' +
-        '\n' +
-        '========================\n';
-
-      console.log('Test print: Sending text to printer...');
-      const success = await bluetoothPrinter.printText(testText);
+      console.log('Test print: Loading image from URL...');
+      
+      // Convert image URL to data URL to handle CORS with timeout
+      const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
+      const imageDataURL = await Promise.race<string>([
+        new Promise<string>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous'; // Enable CORS
+          
+          let resolved = false;
+          
+          img.onload = () => {
+            if (resolved) return; // Prevent multiple calls
+            resolved = true;
+            
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d');
+              if (!ctx) {
+                reject(new Error('Failed to create canvas context'));
+                return;
+              }
+              ctx.drawImage(img, 0, 0);
+              const dataURL = canvas.toDataURL('image/png');
+              console.log('Test print: Image loaded successfully');
+              resolve(dataURL);
+            } catch (error) {
+              reject(error);
+            }
+          };
+          
+          img.onerror = (error) => {
+            if (resolved) return; // Prevent multiple calls
+            resolved = true;
+            console.error('Test print: Failed to load image', error);
+            reject(new Error('Failed to load test image. Pastikan URL dapat diakses dan CORS sudah dikonfigurasi dengan benar.'));
+          };
+          
+          img.src = testImageUrl;
+        }),
+        new Promise<string>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error(`Image load timeout setelah ${IMAGE_LOAD_TIMEOUT / 1000} detik. Pastikan koneksi internet stabil dan URL dapat diakses.`));
+          }, IMAGE_LOAD_TIMEOUT);
+        })
+      ]);
+      
+      console.log('Test print: Sending image to printer...');
+      const success = await bluetoothPrinter.printImage(imageDataURL, 384);
       
       if (success) {
         alert('Test print berhasil dikirim! Cek printer Anda.');

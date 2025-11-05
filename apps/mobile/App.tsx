@@ -278,28 +278,6 @@ function App() {
           await handleDisconnectPrinter();
           break;
           
-        case 'PRINT_TEXT':
-          // Check if already connected
-          if (!connectedDevice) {
-            console.log('App: Print text requested but no printer connected, opening modal...');
-            // Show modal to connect first
-            await checkPermissionAndOpenModal();
-            // Don't print yet - user needs to connect first
-            sendMessageToWebView({
-              type: 'PRINT_FAILED',
-              data: { 
-                success: false, 
-                error: 'No printer connected. Please connect to a printer first.',
-                needsConnection: true
-              }
-            });
-          } else {
-            // Printer already connected, print directly
-            console.log('App: Printer connected, printing text directly...');
-            await handlePrintText(message.data.text);
-          }
-          break;
-          
         case 'PRINT_DITHERED_BITMAP':
           // Check if already connected
           if (!connectedDevice) {
@@ -499,40 +477,6 @@ function App() {
     }
     
     console.log('App: Printer disconnected');
-  };
-
-  const handlePrintText = async (text: string) => {
-    try {
-      if (!connectedDevice) {
-        throw new Error('No printer connected');
-      }
-      
-      // Show progress
-      sendMessageToWebView({
-        type: 'PRINT_PROGRESS',
-        data: { status: 'printing', progress: 50 }
-      });
-      
-      const success = await printer.printText(text);
-      
-      sendMessageToWebView({
-        type: success ? 'PRINT_SUCCESS' : 'PRINT_FAILED',
-        data: { success, progress: 100 }
-      });
-      
-      if (success) {
-        Alert.alert('Success', 'Test print sent!');
-      } else {
-        throw new Error('Print failed');
-      }
-    } catch (error) {
-      Sentry.captureException(error);
-      sendMessageToWebView({
-        type: 'BLUETOOTH_ERROR',
-        data: { error: String(error), errorCode: 'PRINT_ERROR' }
-      });
-      Alert.alert('Print Error', String(error));
-    }
   };
 
   const handlePrintBitmap = async (

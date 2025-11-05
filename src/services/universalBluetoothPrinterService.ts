@@ -191,23 +191,72 @@ export class UniversalBluetoothPrinterService {
   }
 
   private async convertToThermalFormat(imageDataURL: string, config: PrinterConfig): Promise<string> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const targetWidth = config.width;
-        const targetHeight = Math.round((img.height * targetWidth) / img.width);
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, targetWidth, targetHeight);
-        const imageData = ctx?.getImageData(0, 0, targetWidth, targetHeight);
-        if (!imageData) return resolve('');
-        const bitmap = this.imageDataToEscPosBitmap(imageData, config);
-        resolve(bitmap);
-      };
-      img.src = imageDataURL;
-    });
+    const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
+    
+    return Promise.race<string>([
+      new Promise<string>((resolve, reject) => {
+        const img = new Image();
+        let resolved = false;
+        
+        img.onload = () => {
+          if (resolved) return; // Prevent multiple calls
+          resolved = true;
+          
+          try {
+            const targetWidth = config.width;
+            const targetHeight = Math.round((img.height * targetWidth) / img.width);
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Failed to create canvas context'));
+              return;
+            }
+            
+            // CRITICAL: Disable image smoothing for thermal printer (preserve pure black/white)
+            ctx.imageSmoothingEnabled = false;
+            
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+            
+            // Force pure black/white conversion for thermal printer
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+              const r = data[i];
+              const g = data[i + 1];
+              const b = data[i + 2];
+              // Use proper luminance formula
+              const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
+              // Force to pure black or white (threshold 128)
+              const value = gray < 128 ? 0 : 255;
+              data[i] = value;     // R
+              data[i + 1] = value; // G
+              data[i + 2] = value; // B
+              // Alpha stays the same
+            }
+            
+            const bitmap = this.imageDataToEscPosBitmap(imageData, config);
+            resolve(bitmap);
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error('Failed to process image'));
+          }
+        };
+        
+        img.onerror = (error) => {
+          if (resolved) return; // Prevent multiple calls
+          resolved = true;
+          reject(new Error('Failed to load image'));
+        };
+        
+        img.src = imageDataURL;
+      }),
+      new Promise<string>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Image conversion timeout after ${IMAGE_LOAD_TIMEOUT / 1000} seconds`));
+        }, IMAGE_LOAD_TIMEOUT);
+      })
+    ]);
   }
 
   private imageDataToEscPosBitmap(imageData: ImageData, config: PrinterConfig): string {
@@ -223,11 +272,12 @@ export class UniversalBluetoothPrinterService {
           const yy = y + bit;
           if (yy >= height) continue;
           const idx = (yy * width + x) * 4;
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
-          const gray = (r + g + b) / 3;
-          if (gray < 128) byte |= 1 << (7 - bit);
+          // Since we already forced pure black/white in convertToThermalFormat,
+          // R, G, B are all the same. Just check if it's black (value < 128)
+          const gray = data[idx]; // R, G, B are all the same after forced conversion
+          if (gray < 128) {
+            byte |= 1 << (7 - bit); // Set bit for black pixel
+          }
         }
         out += String.fromCharCode(byte);
       }

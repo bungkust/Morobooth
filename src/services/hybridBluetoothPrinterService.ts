@@ -114,17 +114,6 @@ export class HybridBluetoothPrinterService {
     this.printerInfo = null;
   }
 
-  async printText(text: string): Promise<boolean> {
-    if (this.isNative) {
-      nativeBridge.sendMessage('PRINT_TEXT', { text });
-      return true;
-    } else {
-      // Web Bluetooth - could implement text printing here if needed
-      console.warn('Text printing not fully supported in Web Bluetooth');
-      return false;
-    }
-  }
-
   async printImage(imageDataURL: string, width: number = 384): Promise<boolean> {
     if (this.isNative) {
       // Convert image to 1-bit dithered bitmap
@@ -147,45 +136,75 @@ export class HybridBluetoothPrinterService {
     imageDataURL: string,
     targetWidth: number
   ): Promise<{ base64: string; width: number; height: number }> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => {
-        const aspectRatio = img.height / img.width;
-        const targetHeight = Math.floor(targetWidth * aspectRatio);
+    const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
+    
+    return Promise.race<{ base64: string; width: number; height: number }>([
+      new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
+        const img = new Image();
+        let resolved = false;
         
-        const canvas = document.createElement('canvas');
-        canvas.width = targetWidth;
-        canvas.height = targetHeight;
+        img.onload = () => {
+          if (resolved) return; // Prevent multiple calls
+          resolved = true;
+          
+          try {
+            const aspectRatio = img.height / img.width;
+            const targetHeight = Math.floor(targetWidth * aspectRatio);
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = targetWidth;
+            canvas.height = targetHeight;
+            
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Canvas context not available'));
+              return;
+            }
+            
+            // CRITICAL: Disable image smoothing for thermal printer (preserve pure black/white)
+            ctx.imageSmoothingEnabled = false;
+            
+            ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+            const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+            
+            // Apply ordered dithering directly to ImageData
+            this.applyOrderedDither(imageData);
+            
+            // Convert to 1-bit bitmap (0=white, 1=black)
+            const bitmap = new Uint8Array(targetWidth * targetHeight);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+              const pixelIndex = i / 4;
+              const gray = imageData.data[i]; // R channel
+              bitmap[pixelIndex] = gray < 128 ? 1 : 0;
+            }
+            
+            // Convert to base64 (chunked for large arrays)
+            const base64 = this.arrayToBase64(bitmap);
+            
+            resolve({
+              base64,
+              width: targetWidth,
+              height: targetHeight
+            });
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error('Failed to process image'));
+          }
+        };
         
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return reject(new Error('Canvas context not available'));
+        img.onerror = () => {
+          if (resolved) return; // Prevent multiple calls
+          resolved = true;
+          reject(new Error('Failed to load image'));
+        };
         
-        ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
-        const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
-        
-        // Apply ordered dithering directly to ImageData
-        this.applyOrderedDither(imageData);
-        
-        // Convert to 1-bit bitmap (0=white, 1=black)
-        const bitmap = new Uint8Array(targetWidth * targetHeight);
-        for (let i = 0; i < imageData.data.length; i += 4) {
-          const pixelIndex = i / 4;
-          const gray = imageData.data[i]; // R channel
-          bitmap[pixelIndex] = gray < 128 ? 1 : 0;
-        }
-        
-        // Convert to base64 (chunked for large arrays)
-        const base64 = this.arrayToBase64(bitmap);
-        
-        resolve({
-          base64,
-          width: targetWidth,
-          height: targetHeight
-        });
-      };
-      img.onerror = () => reject(new Error('Failed to load image'));
-      img.src = imageDataURL;
-    });
+        img.src = imageDataURL;
+      }),
+      new Promise<{ base64: string; width: number; height: number }>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error(`Image conversion timeout after ${IMAGE_LOAD_TIMEOUT / 1000} seconds`));
+        }, IMAGE_LOAD_TIMEOUT);
+      })
+    ]);
   }
 
   private arrayToBase64(arr: Uint8Array): string {
