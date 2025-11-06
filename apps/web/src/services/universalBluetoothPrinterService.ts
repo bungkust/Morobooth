@@ -230,6 +230,8 @@ export class UniversalBluetoothPrinterService {
             
             // Force pure black/white conversion for thermal printer
             const data = imageData.data;
+            let blackCount = 0;
+            let whiteCount = 0;
             for (let i = 0; i < data.length; i += 4) {
               const r = data[i];
               const g = data[i + 1];
@@ -242,7 +244,21 @@ export class UniversalBluetoothPrinterService {
               data[i + 1] = value; // G
               data[i + 2] = value; // B
               // Alpha stays the same
+              
+              if (value < 128) blackCount++;
+              else whiteCount++;
             }
+            
+            // Debug logging for image conversion
+            const totalPixels = blackCount + whiteCount;
+            console.log('Image conversion stats:', {
+              width: targetWidth,
+              height: targetHeight,
+              totalPixels,
+              blackPixels: blackCount,
+              whitePixels: whiteCount,
+              blackPercentage: totalPixels > 0 ? ((blackCount / totalPixels) * 100).toFixed(2) + '%' : '0%'
+            });
             
             const bitmap = this.imageDataToEscPosBitmap(imageData);
             resolve(bitmap);
@@ -270,6 +286,11 @@ export class UniversalBluetoothPrinterService {
   private imageDataToEscPosBitmap(imageData: ImageData): string {
     const { data, width, height } = imageData;
     let out = '';
+    
+    // Debug stats
+    let totalBytes = 0;
+    let bytesWithBits = 0;
+    let totalBitsSet = 0;
     
     // Process in 8-dot rows (vertical bit packing)
     // ESC/POS format: ESC * m nL nH [data bytes]
@@ -300,15 +321,30 @@ export class UniversalBluetoothPrinterService {
             // Black pixels (gray < 128) should set bit = 1 to print
             if (gray < 128) { // Black pixel = set bit to 1
               byte |= (1 << (7 - bit)); // Set bit for black pixel (MSB first)
+              totalBitsSet++;
             }
           }
         }
+        if (byte > 0) bytesWithBits++;
+        totalBytes++;
         out += String.fromCharCode(byte);
       }
       // ESC/POS requires explicit line feed after each bitmap row to advance print head
       // Without LF, all rows will overlap at the same vertical position
       out += '\x0A'; // Line feed to advance to next row
     }
+    
+    // Debug logging for bitmap generation
+    console.log('Bitmap generation stats:', {
+      width,
+      height,
+      rows: Math.ceil(height / 8),
+      totalBytes,
+      bytesWithBits,
+      bytesWithBitsPercentage: totalBytes > 0 ? ((bytesWithBits / totalBytes) * 100).toFixed(2) + '%' : '0%',
+      totalBitsSet,
+      payloadLength: out.length
+    });
     
     return out;
   }

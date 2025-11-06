@@ -327,63 +327,45 @@ export const AdminPage = () => {
     setBluetoothError('');
 
     try {
-      // Load image from Supabase URL
-      const testImageUrl = 'https://aoxxjvnwwnedlxikyzds.supabase.co/storage/v1/object/sign/photos/SUNATAN-5KEJ-9-001.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV81N2MyNjM3ZS1hNWExLTQzMjEtYTQxNi1mMDVjMzc1OTBjYzIiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwaG90b3MvU1VOQVRBTi01S0VKLTktMDAxLnBuZyIsImlhdCI6MTc2MjMwODg2MSwiZXhwIjoxNzkzODQ0ODYxfQ.VeVbnn7d0EokegZxNJG-6-60KK-MyZxnS1P_XBTMByE';
+      console.log('Test print: Creating simple test pattern...');
       
-      console.log('Test print: Loading image from URL...');
+      // Create simple test pattern - kotak hitam + text untuk 58mm printer (384px width)
+      const canvas = document.createElement('canvas');
+      canvas.width = 384; // 58mm printer width
+      canvas.height = 200; // Height untuk test
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Failed to create canvas context');
+      }
       
-      // Convert image URL to data URL to handle CORS with timeout
-      const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
-      const imageDataURL = await Promise.race<string>([
-        new Promise<string>((resolve, reject) => {
-          const img = new Image();
-          img.crossOrigin = 'anonymous'; // Enable CORS
-          
-          let resolved = false;
-          
-          img.onload = () => {
-            if (resolved) return; // Prevent multiple calls
-            resolved = true;
-            
-            try {
-              const canvas = document.createElement('canvas');
-              canvas.width = img.width;
-              canvas.height = img.height;
-              const ctx = canvas.getContext('2d');
-              if (!ctx) {
-                reject(new Error('Failed to create canvas context'));
-                return;
-              }
-              ctx.drawImage(img, 0, 0);
-              const dataURL = canvas.toDataURL('image/png');
-              console.log('Test print: Image loaded successfully');
-              resolve(dataURL);
-            } catch (error) {
-              reject(error);
-            }
-          };
-          
-          img.onerror = (error) => {
-            if (resolved) return; // Prevent multiple calls
-            resolved = true;
-            console.error('Test print: Failed to load image', error);
-            reject(new Error('Failed to load test image. Pastikan URL dapat diakses dan CORS sudah dikonfigurasi dengan benar.'));
-          };
-          
-          img.src = testImageUrl;
-        }),
-        new Promise<string>((_, reject) => {
-          setTimeout(() => {
-            reject(new Error(`Image load timeout setelah ${IMAGE_LOAD_TIMEOUT / 1000} detik. Pastikan koneksi internet stabil dan URL dapat diakses.`));
-          }, IMAGE_LOAD_TIMEOUT);
-        })
-      ]);
+      // White background
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, 384, 200);
       
-      console.log('Test print: Sending image to printer...');
-      const success = await bluetoothPrinter.printImage(imageDataURL, 384);
+      // Black rectangle di tengah (pastikan ada black pixels)
+      ctx.fillStyle = 'black';
+      ctx.fillRect(50, 50, 284, 100);
+      
+      // Text "TEST" besar di tengah kotak
+      ctx.fillStyle = 'white'; // White text on black background
+      ctx.font = 'bold 60px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('TEST', 192, 100);
+      
+      // Border hitam di sekeliling
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 0, 384, 200);
+      
+      const testDataURL = canvas.toDataURL('image/png');
+      console.log('Test print: Test pattern created, size:', canvas.width, 'x', canvas.height);
+      
+      console.log('Test print: Sending test pattern to printer...');
+      const success = await bluetoothPrinter.printImage(testDataURL, 384);
       
       if (success) {
-        alert('Test print berhasil dikirim! Cek printer Anda.');
+        alert('Test print berhasil dikirim! Cek printer Anda. Seharusnya ada kotak hitam dengan text "TEST".');
       } else {
         throw new Error('Print gagal');
       }
