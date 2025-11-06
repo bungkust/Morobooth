@@ -222,8 +222,25 @@ export class NativeBLEPrinter {
 
     try {
       const bitmapData = Buffer.from(bitmapBase64, 'base64');
+      const bitmap = new Uint8Array(bitmapData);
+
+      // Debug: cek komposisi bitmap (0=white, 1=black)
+      let blackCount = 0;
+      let whiteCount = 0;
+      for (let i = 0; i < bitmap.length; i++) {
+        if (bitmap[i] === 1) blackCount++; else whiteCount++;
+      }
+      console.log('Native bitmap stats:', {
+        width,
+        height,
+        totalPixels: bitmap.length,
+        blackPixels: blackCount,
+        whitePixels: whiteCount,
+        blackPercentage: bitmap.length > 0 ? ((blackCount / bitmap.length) * 100).toFixed(2) + '%' : '0%'
+      });
+
       const escposCommands = this.generateESCPOSFromBitmap(
-        new Uint8Array(bitmapData),
+        bitmap,
         width,
         height
       );
@@ -269,8 +286,8 @@ export class NativeBLEPrinter {
     // ESC @ - Initialize printer
     commands.push(0x1B, 0x40);
     
-    // ESC a 1 - Center alignment
-    commands.push(0x1B, 0x61, 0x01);
+    // NOTE: Beberapa printer tidak mendukung center alignment untuk bitmap, kirim left aligned
+    // commands.push(0x1B, 0x61, 0x01);
     
     // Process in 8-dot rows - Use mode 0 (8-dot single density, normal) for better compatibility
     // ESC/POS format: ESC * m nL nH [data bytes]

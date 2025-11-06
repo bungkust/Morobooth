@@ -172,15 +172,29 @@ export class HybridBluetoothPrinterService {
             
             // Convert to 1-bit bitmap (0=white, 1=black)
             const bitmap = new Uint8Array(targetWidth * targetHeight);
+            let blackCount = 0;
+            let whiteCount = 0;
             for (let i = 0; i < imageData.data.length; i += 4) {
               const pixelIndex = i / 4;
               const gray = imageData.data[i]; // R channel
-              bitmap[pixelIndex] = gray < 128 ? 1 : 0;
+              const v = gray < 128 ? 1 : 0;
+              bitmap[pixelIndex] = v;
+              if (v === 1) blackCount++; else whiteCount++;
             }
             
             // Convert to base64 (chunked for large arrays)
             const base64 = this.arrayToBase64(bitmap);
             
+            // Debug stats untuk memastikan ada black pixels
+            console.log('Dithered bitmap stats:', {
+              width: targetWidth,
+              height: targetHeight,
+              totalPixels: blackCount + whiteCount,
+              blackPixels: blackCount,
+              whitePixels: whiteCount,
+              blackPercentage: (blackCount + whiteCount) > 0 ? ((blackCount / (blackCount + whiteCount)) * 100).toFixed(2) + '%' : '0%'
+            });
+
             resolve({
               base64,
               width: targetWidth,

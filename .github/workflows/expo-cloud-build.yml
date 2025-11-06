@@ -1,0 +1,212 @@
+name: Expo Cloud Build (EAS)
+
+on:
+      workflow_dispatch:
+        inputs:
+          buildProfile:
+            description: 'EAS Build Profile'
+            required: true
+            default: 'debug'
+            type: choice
+            options: [development, debug, preview, production]
+          platform:
+            description: 'Platform to build'
+            required: true
+            default: 'android'
+            type: choice
+            options: [android, ios, all]
+          webviewUrl:
+            description: 'WebView URL (optional, overrides profile default)'
+            required: false
+            type: string
+          waitForBuild:
+            description: 'Wait for build to complete'
+            required: false
+            default: 'false'
+            type: choice
+            options: ['true', 'false']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'apps/mobile/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ./apps/mobile
+        run: npm ci
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Configure EAS
+        working-directory: ./apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "⚠️ EXPO_TOKEN secret not set. Build will require manual authentication."
+            echo "Please set EXPO_TOKEN in GitHub Secrets for automated builds."
+          else
+            eas whoami || eas login --non-interactive
+          fi
+
+      - name: Update app.json with custom webviewUrl (if provided)
+        if: ${{ inputs.webviewUrl != '' }}
+        working-directory: ./apps/mobile
+        run: |
+          echo "Updating app.json with custom webviewUrl: ${{ inputs.webviewUrl }}"
+          node -e "
+            const fs = require('fs');
+            const config = require('./app.json');
+            if (!config.expo.extra) {
+              config.expo.extra = {};
+            }
+            config.expo.extra.webviewUrl = '${{ inputs.webviewUrl }}';
+            fs.writeFileSync('./app.json', JSON.stringify(config, null, 2));
+            console.log('✅ Webview URL updated to:', config.expo.extra.webviewUrl);
+          "
+
+      - name: Build with EAS
+        id: eas_build
+        working-directory: ./apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_WEBVIEW_URL: ${{ inputs.webviewUrl || '' }}
+        run: |
+          echo "================================================"
+          echo "Starting EAS Cloud Build"
+          echo "================================================"
+          echo "Platform: ${{ inputs.platform }}"
+          echo "Profile: ${{ inputs.buildProfile }}"
+          echo "WebView URL: ${{ inputs.webviewUrl || 'Using profile default' }}"
+          echo "Wait for build: ${{ inputs.waitForBuild }}"
+          echo "================================================"
+          
+          WAIT_FLAG=""
+          if [ "${{ inputs.waitForBuild }}" = "true" ]; then
+            WAIT_FLAG="--wait"
+            echo "⏳ Will wait for build to complete..."
+          else
+            WAIT_FLAG="--no-wait"
+            echo "⚡ Build will run asynchronously..."
+          fi
+          
+          if [ "${{ inputs.platform }}" = "all" ]; then
+            echo "Building for both Android and iOS..."
+            eas build --platform all --profile ${{ inputs.buildProfile }} --non-interactive $WAIT_FLAG
+          else
+            echo "Building for ${{ inputs.platform }}..."
+            eas build --platform ${{ inputs.platform }} --profile ${{ inputs.buildProfile }} --non-interactive $WAIT_FLAG
+          fi
+          
+          echo "================================================"
+          if [ "${{ inputs.waitForBuild }}" = "true" ]; then
+            echo "✅ Build completed!"
+          else
+            echo "Build submitted to EAS Cloud"
+          fi
+          echo "Check build status at: https://expo.dev/accounts/bungkust/projects/morobooth/builds"
+          echo "================================================"
+
+      - name: Get build status and download links
+        if: ${{ inputs.waitForBuild == 'true' }}
+        working-directory: ./apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          echo "Fetching latest build information..."
+          BUILD_INFO=$(eas build:list --platform ${{ inputs.platform }} --limit 1 --json 2>/dev/null || echo "[]")
+          echo "$BUILD_INFO" | jq '.' || echo "Could not parse build info"
+          
+          # Extract download URLs if available
+          if [ "${{ inputs.platform }}" = "all" ]; then
+            echo "For multi-platform builds, check the Expo dashboard for download links"
+          else
+            echo "Build artifacts are available in the Expo dashboard"
+          fi
+
+  notify:
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Set email from address
+        id: email_from
+        run: |
+          if [ -n "${{ secrets.EMAIL_FROM }}" ]; then
+            echo "from=${{ secrets.EMAIL_FROM }}" >> $GITHUB_OUTPUT
+          else
+            echo "from=${{ secrets.EMAIL_USERNAME }}" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Send email on success
+        if: needs.build.result == 'success'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
+          server_port: ${{ secrets.EMAIL_SMTP_PORT || 465 }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "✅ Expo Cloud Build Submitted - Morobooth"
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ steps.email_from.outputs.from }}
+          body: |
+            ✅ EAS Cloud Build Berhasil Disubmit!
+            
+            Detail Build:
+            - Workflow: ${{ github.workflow }}
+            - Platform: ${{ github.event.inputs.platform }}
+            - Build Profile: ${{ github.event.inputs.buildProfile }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+            - Actor: ${{ github.actor }}
+            - WebView URL: ${{ github.event.inputs.webviewUrl || 'Using profile default' }}
+            
+            Build Status:
+            Build telah disubmit ke EAS Cloud dan sedang diproses.
+            Anda dapat memantau status build di:
+            https://expo.dev/accounts/bungkust/projects/morobooth/builds
+            
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+      - name: Send email on failure
+        if: needs.build.result == 'failure'
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
+          server_port: ${{ secrets.EMAIL_SMTP_PORT || 465 }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: "❌ Expo Cloud Build Failed - Morobooth"
+          to: ${{ secrets.EMAIL_RECIPIENT }}
+          from: ${{ steps.email_from.outputs.from }}
+          body: |
+            ❌ EAS Cloud Build Gagal!
+            
+            Detail Build:
+            - Workflow: ${{ github.workflow }}
+            - Platform: ${{ github.event.inputs.platform }}
+            - Build Profile: ${{ github.event.inputs.buildProfile }}
+            - Commit: ${{ github.sha }}
+            - Branch: ${{ github.ref_name }}
+            - Actor: ${{ github.actor }}
+            - WebView URL: ${{ github.event.inputs.webviewUrl || 'Using profile default' }}
+            
+            Error Details:
+            Silakan cek log build untuk detail error lebih lengkap.
+            
+            View Build Logs on GitHub:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            
+            Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
