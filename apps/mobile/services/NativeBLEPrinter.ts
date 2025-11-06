@@ -273,6 +273,7 @@ export class NativeBLEPrinter {
     commands.push(0x1B, 0x61, 0x01);
     
     // Process in 8-dot rows - Use mode 0 (8-dot single density, normal) for better compatibility
+    // ESC/POS format: ESC * m nL nH [data bytes]
     for (let y = 0; y < height; y += 8) {
       // ESC * m nL nH - m=0 (8-dot single density), n=width in dots
       commands.push(0x1B, 0x2A, 0x00); // ESC * 0 (8-dot single density, normal)
@@ -281,6 +282,7 @@ export class NativeBLEPrinter {
       commands.push(nL, nH);
       
       // Build bitmap bytes column by column (vertical bit packing)
+      // Each byte = 8 vertical pixels in one column
       for (let x = 0; x < width; x++) {
         let byte = 0;
         // Vertical bit packing: 8 pixels per byte, top to bottom
@@ -289,15 +291,19 @@ export class NativeBLEPrinter {
           const pixelY = y + bit;
           if (pixelY < height) {
             const pixelIndex = pixelY * width + x;
-            if (bitmap[pixelIndex] === 1) { // Black pixel
+            // ESC/POS standard: Bit 1 = print (black), Bit 0 = no print (white)
+            // Bitmap format: 0=white, 1=black
+            // Black pixels (bitmap[pixelIndex] === 1) should set bit = 1 to print
+            if (bitmap[pixelIndex] === 1) { // Black pixel = set bit to 1
               byte |= 1 << (7 - bit); // Set bit for black pixel (MSB first)
             }
           }
         }
         commands.push(byte);
       }
-      // Add line feed after each row (required for some printers)
-      commands.push(0x0A); // LF
+      // ESC/POS requires explicit line feed after each bitmap row to advance print head
+      // Without LF, all rows will overlap at the same vertical position
+      commands.push(0x0A); // Line feed to advance to next row
     }
     
     // Feed paper

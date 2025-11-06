@@ -264,6 +264,8 @@ export class UniversalBluetoothPrinterService {
     let out = '';
     
     // Process in 8-dot rows (vertical bit packing)
+    // ESC/POS format: ESC * m nL nH [data bytes]
+    // Mode 0 = 8-dot single density (normal)
     for (let y = 0; y < height; y += 8) {
       // ESC * m nL nH - m=0 (8-dot single density), n=width in dots
       out += '\x1B\x2A\x00'; // ESC * 0 (8-dot single density, normal)
@@ -273,6 +275,7 @@ export class UniversalBluetoothPrinterService {
       out += String.fromCharCode(nH);
       
       // Build bitmap bytes column by column (vertical bit packing)
+      // Each byte = 8 vertical pixels in one column
       for (let x = 0; x < width; x++) {
         let byte = 0;
         // Vertical bit packing: 8 pixels per byte, top to bottom
@@ -284,16 +287,19 @@ export class UniversalBluetoothPrinterService {
             // Since we already forced pure black/white in convertToThermalFormat,
             // R, G, B are all the same. Just check if it's black (value < 128)
             const gray = data[idx]; // R channel (already pure black/white)
-            // Black pixel = 1, White pixel = 0
-            if (gray < 128) { // Black pixel
+            
+            // ESC/POS standard: Bit 1 = print (black), Bit 0 = no print (white)
+            // Black pixels (gray < 128) should set bit = 1 to print
+            if (gray < 128) { // Black pixel = set bit to 1
               byte |= (1 << (7 - bit)); // Set bit for black pixel (MSB first)
             }
           }
         }
         out += String.fromCharCode(byte);
       }
-      // Add line feed after each row (required for some printers)
-      out += '\x0A';
+      // ESC/POS requires explicit line feed after each bitmap row to advance print head
+      // Without LF, all rows will overlap at the same vertical position
+      out += '\x0A'; // Line feed to advance to next row
     }
     
     return out;
