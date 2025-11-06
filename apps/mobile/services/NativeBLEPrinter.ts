@@ -89,7 +89,7 @@ export class NativeBLEPrinter {
       await Promise.race([connectPromise, timeoutPromise]);
       
       console.log('Connected, discovering services...');
-      const peripheralInfo = await BleManager.retrieveServices(deviceId);
+      const peripheralInfo: any = await BleManager.retrieveServices(deviceId);
       
       console.log('peripheralInfo structure:', JSON.stringify(Object.keys(peripheralInfo)));
       console.log('Has services:', !!peripheralInfo.services);
@@ -99,19 +99,21 @@ export class NativeBLEPrinter {
       if (peripheralInfo.characteristics && peripheralInfo.characteristics.length > 0) {
         console.log('Found characteristics directly in peripheralInfo:', peripheralInfo.characteristics.length);
         
-        for (const char of peripheralInfo.characteristics) {
-          console.log('Checking characteristic:', char.characteristic, 'properties:', char.properties);
+        for (const char of peripheralInfo.characteristics as any[]) {
+          const c: any = char;
+          console.log('Checking characteristic:', c.characteristic, 'properties:', c.properties);
           
-          if (char.properties?.Write || char.properties?.WriteWithoutResponse) {
-            console.log('Found writable characteristic:', char.characteristic);
+          if (c.properties?.Write || c.properties?.WriteWithoutResponse) {
+            console.log('Found writable characteristic:', c.characteristic);
             
             // Find the service UUID for this characteristic
             let foundService: any = null;
             if (peripheralInfo.services && peripheralInfo.services.length > 0) {
               // Try to match characteristic to service by checking service UUID
-              for (const service of peripheralInfo.services) {
-                if (char.service === service.uuid || char.serviceUUID === service.uuid) {
-                  foundService = service;
+              for (const service of peripheralInfo.services as any[]) {
+                const s: any = service;
+                if (c.service === s.uuid || c.serviceUUID === s.uuid) {
+                  foundService = s;
                   break;
                 }
               }
@@ -125,8 +127,8 @@ export class NativeBLEPrinter {
               this.serviceUUID = foundService.uuid;
             }
             
-            this.characteristicUUID = char.characteristic;
-            this.characteristicProperties = char.properties;
+            this.characteristicUUID = c.characteristic;
+            this.characteristicProperties = c.properties;
             
             // MTU negotiation with proper error handling
             try {
@@ -151,16 +153,18 @@ export class NativeBLEPrinter {
       // Fallback: Old API with services (should not reach here in v11.5.0)
       if (peripheralInfo.services && peripheralInfo.services.length > 0) {
         console.log('Trying old API with services:', peripheralInfo.services.length);
-        for (const service of peripheralInfo.services) {
-          console.log('Service UUID:', service.uuid);
+        for (const service of peripheralInfo.services as any[]) {
+          const s: any = service;
+          console.log('Service UUID:', s.uuid);
           // In old API, service should have characteristics
-          if (service.characteristics && service.characteristics.length > 0) {
-            for (const char of service.characteristics) {
-              if (char.properties?.Write || char.properties?.WriteWithoutResponse) {
-                console.log('Found writable characteristic:', char.characteristic);
-                this.serviceUUID = service.uuid;
-                this.characteristicUUID = char.characteristic;
-                this.characteristicProperties = char.properties;
+          if (s.characteristics && s.characteristics.length > 0) {
+            for (const char of s.characteristics as any[]) {
+              const c: any = char;
+              if (c.properties?.Write || c.properties?.WriteWithoutResponse) {
+                console.log('Found writable characteristic:', c.characteristic);
+                this.serviceUUID = s.uuid;
+                this.characteristicUUID = c.characteristic;
+                this.characteristicProperties = c.properties;
                 
                 // MTU negotiation
                 try {
@@ -222,28 +226,57 @@ export class NativeBLEPrinter {
 
     try {
       const bitmapData = Buffer.from(bitmapBase64, 'base64');
-      const bitmap = new Uint8Array(bitmapData);
+      const raw = new Uint8Array(bitmapData);
 
-      // Debug: cek komposisi bitmap (0=white, 1=black)
-      let blackCount = 0;
-      let whiteCount = 0;
-      for (let i = 0; i < bitmap.length; i++) {
-        if (bitmap[i] === 1) blackCount++; else whiteCount++;
+      // Normalize input to unpacked 0/1 per-pixel array of length width*height
+      const expectedPixels = width * height;
+      const bytesPerRow = Math.ceil(width / 8);
+      let pixels: Uint8Array;
+      if (raw.length === expectedPixels) {
+        // Already unpacked (0/1 per pixel)
+        pixels = raw;
+      } else if (raw.length === bytesPerRow * height) {
+        // Packed bits -> unpack to 0/1 per pixel (MSB first)
+        pixels = new Uint8Array(expectedPixels);
+        let idx = 0;
+        for (let y = 0; y < height; y++) {
+          for (let bx = 0; bx < bytesPerRow; bx++) {
+            const byte = raw[y * bytesPerRow + bx];
+            for (let bit = 0; bit < 8; bit++) {
+              const x = bx * 8 + bit;
+              if (x < width) {
+                const bitVal = (byte & (0x80 >> bit)) ? 1 : 0; // 1 = black
+                pixels[idx++] = bitVal;
+              }
+            }
+          }
+        }
+      } else {
+        console.warn('Bitmap length does not match width*height or packed size. Attempting best-effort print.', {
+          providedLength: raw.length,
+          expectedPixels,
+          expectedPacked: bytesPerRow * height
+        });
+        // Fallback: truncate or pad to expectedPixels
+        pixels = new Uint8Array(expectedPixels);
+        const len = Math.min(expectedPixels, raw.length);
+        for (let i = 0; i < len; i++) pixels[i] = raw[i] ? 1 : 0;
       }
-      console.log('Native bitmap stats:', {
+
+      // Debug stats after normalization
+      let blackCount = 0;
+      for (let i = 0; i < pixels.length; i++) if (pixels[i] === 1) blackCount++;
+      console.log('Native bitmap stats (normalized):', {
         width,
         height,
-        totalPixels: bitmap.length,
+        totalPixels: pixels.length,
         blackPixels: blackCount,
-        whitePixels: whiteCount,
-        blackPercentage: bitmap.length > 0 ? ((blackCount / bitmap.length) * 100).toFixed(2) + '%' : '0%'
+        whitePixels: pixels.length - blackCount,
+        blackPercentage: pixels.length > 0 ? ((blackCount / pixels.length) * 100).toFixed(2) + '%' : '0%'
       });
 
-      const escposCommands = this.generateESCPOSFromBitmap(
-        bitmap,
-        width,
-        height
-      );
+      // Use ESC/POS raster bit image (GS v 0) for broader compatibility
+      const escposCommands = this.generateRasterFromBitmap(pixels, width, height);
       
       // Send in optimized chunks
       const chunkSize = this.mtu;
@@ -276,7 +309,7 @@ export class NativeBLEPrinter {
     }
   }
 
-  private generateESCPOSFromBitmap(
+  private generateRasterFromBitmap(
     bitmap: Uint8Array,
     width: number,
     height: number
@@ -286,47 +319,38 @@ export class NativeBLEPrinter {
     // ESC @ - Initialize printer
     commands.push(0x1B, 0x40);
     
-    // NOTE: Beberapa printer tidak mendukung center alignment untuk bitmap, kirim left aligned
-    // commands.push(0x1B, 0x61, 0x01);
+    // GS v 0 m xL xH yL yH [data]  — raster bit image (most compatible)
+    const mode = 0x00; // normal
+    const bytesPerRow = Math.ceil(width / 8);
+    const xL = bytesPerRow & 0xFF;
+    const xH = (bytesPerRow >> 8) & 0xFF;
+    const yL = height & 0xFF;
+    const yH = (height >> 8) & 0xFF;
     
-    // Process in 8-dot rows - Use mode 0 (8-dot single density, normal) for better compatibility
-    // ESC/POS format: ESC * m nL nH [data bytes]
-    for (let y = 0; y < height; y += 8) {
-      // ESC * m nL nH - m=0 (8-dot single density), n=width in dots
-      commands.push(0x1B, 0x2A, 0x00); // ESC * 0 (8-dot single density, normal)
-      const nL = width & 0xFF;
-      const nH = (width >> 8) & 0xFF;
-      commands.push(nL, nH);
-      
-      // Build bitmap bytes column by column (vertical bit packing)
-      // Each byte = 8 vertical pixels in one column
-      for (let x = 0; x < width; x++) {
+    commands.push(0x1D, 0x76, 0x30, mode, xL, xH, yL, yH);
+    
+    // Build data row-wise; each byte packs 8 horizontal pixels, MSB first
+    for (let y = 0; y < height; y++) {
+      for (let bx = 0; bx < bytesPerRow; bx++) {
         let byte = 0;
-        // Vertical bit packing: 8 pixels per byte, top to bottom
-        // MSB first: bit 7 = top pixel (y), bit 0 = bottom pixel (y+7)
         for (let bit = 0; bit < 8; bit++) {
-          const pixelY = y + bit;
-          if (pixelY < height) {
-            const pixelIndex = pixelY * width + x;
-            // ESC/POS standard: Bit 1 = print (black), Bit 0 = no print (white)
-            // Bitmap format: 0=white, 1=black
-            // Black pixels (bitmap[pixelIndex] === 1) should set bit = 1 to print
-            if (bitmap[pixelIndex] === 1) { // Black pixel = set bit to 1
-              byte |= 1 << (7 - bit); // Set bit for black pixel (MSB first)
+          const x = bx * 8 + bit;
+          if (x < width) {
+            const pixelIndex = y * width + x;
+            // 1 = black, set bit to print dot; 0 = white
+            if (bitmap[pixelIndex] === 1) {
+              byte |= (0x80 >> bit);
             }
           }
         }
         commands.push(byte);
       }
-      // ESC/POS requires explicit line feed after each bitmap row to advance print head
-      // Without LF, all rows will overlap at the same vertical position
-      commands.push(0x0A); // Line feed to advance to next row
     }
     
-    // Feed paper
-    commands.push(0x0A, 0x0A, 0x0A);
+    // Feed a bit
+    commands.push(0x0A, 0x0A);
     
-    // Cut paper (GS V 0)
+    // Try cut (ignored by most 58mm)
     commands.push(0x1D, 0x56, 0x00);
     
     return new Uint8Array(commands);

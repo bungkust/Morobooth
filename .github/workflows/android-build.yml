@@ -262,14 +262,18 @@ jobs:
       - name: Set email from address
         id: email_from
         run: |
-          if [ -n "${{ secrets.EMAIL_FROM }}" ]; then
-            echo "from=${{ secrets.EMAIL_FROM }}" >> $GITHUB_OUTPUT
-          else
-            echo "from=${{ secrets.EMAIL_USERNAME }}" >> $GITHUB_OUTPUT
+          FROM_ADDR="${{ secrets.EMAIL_FROM }}"
+          if [ -z "$FROM_ADDR" ]; then
+            FROM_ADDR="${{ secrets.EMAIL_USERNAME }}"
           fi
+          if [ -z "$FROM_ADDR" ]; then
+            # Fallback to GitHub noreply if still empty
+            FROM_ADDR="${{ github.actor }}@users.noreply.github.com"
+          fi
+          echo "from=$FROM_ADDR" >> $GITHUB_OUTPUT
       
       - name: Send email on success
-        if: needs.build-android.result == 'success'
+        if: needs.build-android.result == 'success' && steps.email_from.outputs.from != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
@@ -298,7 +302,7 @@ jobs:
             Workflow Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
       - name: Send email on failure
-        if: needs.build-android.result == 'failure'
+        if: needs.build-android.result == 'failure' && steps.email_from.outputs.from != ''
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.EMAIL_SMTP_SERVER || 'smtp.gmail.com' }}
