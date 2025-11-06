@@ -166,20 +166,28 @@ export class UniversalBluetoothPrinterService {
     if (!this.characteristic || !this.config) return false;
     try {
       const payload = await this.convertToThermalFormat(imageDataURL, this.config);
-      const cmds = [
-        this.config.commands.init,
-        this.config.commands.center,
-        payload,
-        this.config.commands.feed,
-        this.config.commands.cut
-      ];
+      
+      // Convert ASCII command strings to Uint8Array (TextEncoder OK for ASCII)
+      const init = new TextEncoder().encode(this.config.commands.init);
+      const center = new TextEncoder().encode(this.config.commands.center);
+      const feed = new TextEncoder().encode(this.config.commands.feed);
+      const cut = new TextEncoder().encode(this.config.commands.cut);
+      
+      // Convert payload string (binary data) to Uint8Array WITHOUT TextEncoder
+      // payload is a string containing binary bytes created with String.fromCharCode()
+      // TextEncoder would corrupt binary data > 127, so we convert manually
+      const payloadBytes = new Uint8Array(payload.length);
+      for (let i = 0; i < payload.length; i++) {
+        payloadBytes[i] = payload.charCodeAt(i) & 0xFF;
+      }
+      
+      const cmds = [init, center, payloadBytes, feed, cut];
 
       for (const cmd of cmds) {
-        const data = new TextEncoder().encode(cmd);
         if (this.characteristic.properties.writeWithoutResponse) {
-          await this.characteristic.writeValueWithoutResponse(data);
+          await this.characteristic.writeValueWithoutResponse(cmd);
         } else {
-          await this.characteristic.writeValue(data);
+          await this.characteristic.writeValue(cmd);
         }
         await new Promise((r) => setTimeout(r, 40));
       }
