@@ -27,6 +27,15 @@ function App() {
   const [showPrinterModal, setShowPrinterModal] = useState(false);
   const [currentUrl, setCurrentUrl] = useState(WEBVIEW_URL);
   const [isOnline, setIsOnline] = useState(true);
+  
+  // Ref for managing bitmap chunks
+  const bitmapChunksRef = useRef<{
+    chunks: (string | undefined)[];
+    width: number;
+    height: number;
+    totalChunks: number;
+    startTime: number;
+  } | null>(null);
 
   useEffect(() => {
     initializeApp();
@@ -276,15 +285,15 @@ function App() {
           
         case 'DISCONNECT_BLUETOOTH_PRINTER':
           await handleDisconnectPrinter();
+          // Clear any pending chunks on disconnect
+          bitmapChunksRef.current = null;
           break;
           
-        case 'PRINT_DITHERED_BITMAP':
-          // Check if already connected
+        case 'PRINT_DITHERED_BITMAP_START':
+          // Initialize chunk storage
           if (!connectedDevice) {
             console.log('App: Print requested but no printer connected, opening modal...');
-            // Show modal to connect first
             await checkPermissionAndOpenModal();
-            // Don't print yet - user needs to connect first
             sendMessageToWebView({
               type: 'PRINT_FAILED',
               data: { 
@@ -293,14 +302,108 @@ function App() {
                 needsConnection: true
               }
             });
-          } else {
-            // Printer already connected, print directly
-            console.log('App: Printer connected, printing directly...');
-            await handlePrintBitmap(
-              message.data.bitmapBase64,
-              message.data.width,
-              message.data.height
-            );
+            break;
+          }
+          
+          // Clear any previous incomplete chunks
+          if (bitmapChunksRef.current) {
+            console.log('App: Clearing previous incomplete chunks');
+          }
+          
+          bitmapChunksRef.current = {
+            chunks: new Array(message.data.totalChunks),
+            width: message.data.width,
+            height: message.data.height,
+            totalChunks: message.data.totalChunks,
+            startTime: Date.now()
+          };
+          
+          // Store first chunk
+          bitmapChunksRef.current.chunks[0] = message.data.bitmapBase64;
+          
+          console.log(`App: Receiving bitmap chunks: 1/${message.data.totalChunks}, width: ${message.data.width}, height: ${message.data.height}, base64 length: ${message.data.bitmapBase64.length}`);
+          
+          // If only one chunk, reassemble immediately
+          if (message.data.isLast || message.data.totalChunks === 1) {
+            const fullBitmap = bitmapChunksRef.current.chunks.join('');
+            const { width, height } = bitmapChunksRef.current;
+            
+            console.log(`App: Single chunk bitmap, reassembled length: ${fullBitmap.length} bytes`);
+            
+            // Clear ref before printing
+            const printData = { bitmap: fullBitmap, width, height };
+            bitmapChunksRef.current = null;
+            
+            // Print the reassembled bitmap
+            await handlePrintBitmap(printData.bitmap, printData.width, printData.height);
+          }
+          break;
+          
+        case 'PRINT_DITHERED_BITMAP_CHUNK':
+          if (!bitmapChunksRef.current) {
+            console.error('App: No START message received, ignoring chunk');
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: { 
+                success: false, 
+                error: 'Chunk received without START message'
+              }
+            });
+            break;
+          }
+          
+          // Check timeout
+          const elapsed = Date.now() - bitmapChunksRef.current.startTime;
+          if (elapsed > 10000) {
+            console.error('App: Timeout waiting for chunks, clearing');
+            bitmapChunksRef.current = null;
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: { 
+                success: false, 
+                error: 'Timeout waiting for all chunks'
+              }
+            });
+            Alert.alert('Print Error', 'Timeout waiting for print data');
+            break;
+          }
+          
+          // Store chunk at correct index
+          const chunkIndex = message.data.chunkIndex;
+          bitmapChunksRef.current.chunks[chunkIndex] = message.data.bitmapBase64;
+          
+          console.log(`App: Received chunk ${chunkIndex}/${bitmapChunksRef.current.totalChunks - 1}, size: ${message.data.bitmapBase64.length} bytes`);
+          
+          // Check if this is the last chunk
+          if (message.data.isLast) {
+            // Verify all chunks received
+            const missingChunks = bitmapChunksRef.current.chunks.some(chunk => chunk === undefined || chunk === null);
+            if (missingChunks) {
+              console.error('App: Missing chunks detected');
+              bitmapChunksRef.current = null;
+              sendMessageToWebView({
+                type: 'PRINT_FAILED',
+                data: { 
+                  success: false, 
+                  error: 'Missing chunks in print data'
+                }
+              });
+              Alert.alert('Print Error', 'Incomplete print data received');
+              break;
+            }
+            
+            // Reassemble bitmap
+            const fullBitmap = bitmapChunksRef.current.chunks.join('');
+            const { width, height } = bitmapChunksRef.current;
+            
+            console.log(`App: Reassembled bitmap, length: ${fullBitmap.length} bytes`);
+            
+            // Clear ref before printing
+            const printData = { bitmap: fullBitmap, width, height };
+            bitmapChunksRef.current = null;
+            
+            // Print the reassembled bitmap
+            await handlePrintBitmap(printData.bitmap, printData.width, printData.height);
           }
           break;
           

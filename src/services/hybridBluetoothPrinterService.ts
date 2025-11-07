@@ -194,6 +194,17 @@ export class HybridBluetoothPrinterService {
               whitePixels: whiteCount,
               blackPercentage: (blackCount + whiteCount) > 0 ? ((blackCount / (blackCount + whiteCount)) * 100).toFixed(2) + '%' : '0%'
             });
+            
+            // Enhanced debug logging for chunking
+            console.log('Dithered bitmap conversion:', {
+              width: targetWidth,
+              height: targetHeight,
+              bitmapArrayLength: bitmap.length,
+              base64Length: base64.length,
+              expectedPackedBytes: Math.ceil(targetWidth / 8) * targetHeight,
+              expectedUnpackedPixels: targetWidth * targetHeight,
+              willBeChunked: true // Always true now
+            });
 
             resolve({
               base64,

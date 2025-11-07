@@ -163,6 +163,17 @@ export class HybridBluetoothPrinterService {
         // Convert to base64 (chunked for large arrays)
         const base64 = this.arrayToBase64(bitmap);
         
+        // Enhanced debug logging for chunking
+        console.log('Dithered bitmap conversion:', {
+          width: targetWidth,
+          height: targetHeight,
+          bitmapArrayLength: bitmap.length,
+          base64Length: base64.length,
+          expectedPackedBytes: Math.ceil(targetWidth / 8) * targetHeight,
+          expectedUnpackedPixels: targetWidth * targetHeight,
+          willBeChunked: true // Always true now
+        });
+        
         resolve({
           base64,
           width: targetWidth,

@@ -328,7 +328,7 @@ export class NativeBLEPrinter {
     const yH = (height >> 8) & 0xFF;
     
     commands.push(0x1D, 0x76, 0x30, mode, xL, xH, yL, yH);
-    
+      
     // Build data row-wise; each byte packs 8 horizontal pixels, MSB first
     for (let y = 0; y < height; y++) {
       for (let bx = 0; bx < bytesPerRow; bx++) {
