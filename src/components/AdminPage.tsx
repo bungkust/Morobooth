@@ -327,45 +327,12 @@ export const AdminPage = () => {
     setBluetoothError('');
 
     try {
-      console.log('Test print: Creating simple test pattern...');
-      
-      // Create simple test pattern - kotak hitam + text untuk 58mm printer (384px width)
-      const canvas = document.createElement('canvas');
-      canvas.width = 384; // 58mm printer width
-      canvas.height = 200; // Height untuk test
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        throw new Error('Failed to create canvas context');
-      }
-      
-      // White background
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, 384, 200);
-      
-      // Black rectangle di tengah (pastikan ada black pixels)
-      ctx.fillStyle = 'black';
-      ctx.fillRect(50, 50, 284, 100);
-      
-      // Text "TEST" besar di tengah kotak
-      ctx.fillStyle = 'white'; // White text on black background
-      ctx.font = 'bold 60px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('TEST', 192, 100);
-      
-      // Border hitam di sekeliling
-      ctx.strokeStyle = 'black';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 0, 384, 200);
-      
-      const testDataURL = canvas.toDataURL('image/png');
-      console.log('Test print: Test pattern created, size:', canvas.width, 'x', canvas.height);
-      
-      console.log('Test print: Sending test pattern to printer...');
-      const success = await bluetoothPrinter.printImage(testDataURL, 384);
+      console.log('Test print: Generating Street Coffee receipt...');
+      const receiptWidth = printerInfo?.width ?? 384;
+      const success = await bluetoothPrinter.printStreetCoffeeReceipt(receiptWidth);
       
       if (success) {
-        alert('Test print berhasil dikirim! Cek printer Anda. Seharusnya ada kotak hitam dengan text "TEST".');
+        alert('Test print berhasil dikirim! Cek printer Anda untuk struk Street Coffee.');
       } else {
         throw new Error('Print gagal');
       }

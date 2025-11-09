@@ -1,5 +1,6 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
+import { createStreetCoffeeReceipt } from './receiptTemplates';
 
 export class HybridBluetoothPrinterService {
   private webBluetooth: UniversalBluetoothPrinterService | null = null;
@@ -130,6 +131,13 @@ export class HybridBluetoothPrinterService {
       // Web Bluetooth fallback
       return await this.webBluetooth?.printImage(imageDataURL) || false;
     }
+  }
+
+  async printStreetCoffeeReceipt(width?: number): Promise<boolean> {
+    const targetWidth = width ?? this.printerInfo?.width ?? 384;
+    console.log('Generating Street Coffee receipt for test print...');
+    const receiptDataURL = createStreetCoffeeReceipt(targetWidth);
+    return this.printImage(receiptDataURL, targetWidth);
   }
 
   private async convertToDitheredBitmap(

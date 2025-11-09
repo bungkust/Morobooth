@@ -166,30 +166,34 @@ export class UniversalBluetoothPrinterService {
     if (!this.characteristic || !this.config) return false;
     try {
       const payload = await this.convertToThermalFormat(imageDataURL, this.config);
-      
-      // Convert ASCII command strings to Uint8Array (TextEncoder OK for ASCII)
-      const init = new TextEncoder().encode(this.config.commands.init);
-      const center = new TextEncoder().encode(this.config.commands.center);
-      const feed = new TextEncoder().encode(this.config.commands.feed);
-      const cut = new TextEncoder().encode(this.config.commands.cut);
-      
-      // Convert payload string (binary data) to Uint8Array WITHOUT TextEncoder
-      // payload is a string containing binary bytes created with String.fromCharCode()
-      // TextEncoder would corrupt binary data > 127, so we convert manually
-      const payloadBytes = new Uint8Array(payload.length);
-      for (let i = 0; i < payload.length; i++) {
-        payloadBytes[i] = payload.charCodeAt(i) & 0xFF;
-      }
-      
-      const cmds = [init, center, payloadBytes, feed, cut];
+      const asciiEncoder = new TextEncoder();
+      const init = asciiEncoder.encode(this.config.commands.init);
+      const center = asciiEncoder.encode(this.config.commands.center);
+      const feed = asciiEncoder.encode(this.config.commands.feed);
+      const cut = asciiEncoder.encode(this.config.commands.cut);
 
-      for (const cmd of cmds) {
-        if (this.characteristic.properties.writeWithoutResponse) {
-          await this.characteristic.writeValueWithoutResponse(cmd);
-        } else {
-          await this.characteristic.writeValue(cmd);
-        }
-        await new Promise((r) => setTimeout(r, 40));
+      const payloadBytes = new Uint8Array(payload.length);
+      let nonZeroBytes = 0;
+      for (let i = 0; i < payload.length; i++) {
+        const value = payload.charCodeAt(i) & 0xff;
+        payloadBytes[i] = value;
+        if (value !== 0) nonZeroBytes++;
+      }
+
+      if (nonZeroBytes === 0) {
+        console.warn('Generated payload contains only zero bytes. Print may appear blank.');
+      }
+
+      const commandQueue: Array<{ label: string; data: Uint8Array }> = [
+        { label: 'init', data: init },
+        { label: 'center', data: center },
+        { label: 'payload', data: payloadBytes },
+        { label: 'feed', data: feed },
+        { label: 'cut', data: cut }
+      ];
+
+      for (const cmd of commandQueue) {
+        await this.writeInChunks(cmd.data, cmd.label);
       }
       return true;
     } catch (e) {
@@ -362,6 +366,37 @@ export class UniversalBluetoothPrinterService {
       this.characteristic = null;
       this.config = null;
     }
+  }
+
+  private async writeInChunks(data: Uint8Array, label: string): Promise<void> {
+    if (!this.characteristic) {
+      throw new Error('Bluetooth characteristic not ready');
+    }
+
+    const DEFAULT_CHUNK_SIZE = 180;
+    const chunkSize = Math.max(20, DEFAULT_CHUNK_SIZE);
+    const totalChunks = Math.ceil(data.length / chunkSize) || 1;
+
+    for (let i = 0; i < data.length; i += chunkSize) {
+      const chunk = data.slice(i, Math.min(i + chunkSize, data.length));
+      const chunkIndex = Math.floor(i / chunkSize);
+      try {
+        if (this.characteristic.properties.writeWithoutResponse) {
+          await this.characteristic.writeValueWithoutResponse(chunk);
+        } else {
+          await this.characteristic.writeValue(chunk);
+        }
+      } catch (err) {
+        console.error(`Failed to write chunk ${chunkIndex + 1}/${totalChunks} for ${label}`, err);
+        throw err;
+      }
+      if (chunkSize >= 100) {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+    }
+    console.log(
+      `Sent ${label} in ${totalChunks} chunk${totalChunks > 1 ? 's' : ''} (${data.length} bytes)`
+    );
   }
 }
 

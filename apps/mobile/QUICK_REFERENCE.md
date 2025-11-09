@@ -158,6 +158,23 @@ Quick tests to verify everything works:
 
 ---
 
+## ?? **TEST PRINT PROCEDURE**
+
+1. Buka `Admin Panel` ? Tab `Printer`
+2. Pastikan status ? **Printer Connected Successfully!**
+3. Tekan tombol `🖨️ Print Test`
+4. Aplikasi mengirim struk `Street Coffee`
+   - Header: **STREET COFFEE**
+   - Item: Kopi Susu Gula Aren, Es Kopi Hitam, Roti Bakar Keju
+   - Total dengan service charge 5%
+5. Kertas keluar dengan teks jelas + garis pembatas
+6. Jika kertas kosong:
+   - Cek koneksi Bluetooth (disconnect lalu connect lagi)
+   - Pastikan printer support ESC/POS & thermal mode
+   - Lihat log browser untuk chunk write error / payload kosong
+
+---
+
 ## ?? **KEY POINTS**
 
 1. **First connection = Auto-save** ?
