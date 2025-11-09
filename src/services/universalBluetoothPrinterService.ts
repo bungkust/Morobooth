@@ -4,6 +4,15 @@ export interface PrinterConfig {
   name: string;
   width: number; // printable pixel width (58mm -> ~384px, 80mm -> ~576px)
   dpi: number;
+  /**
+   * Threshold defines the cut-off (0-255) used when converting the source canvas
+   * to pure black/white. Higher value => more pixels become black.
+   */
+  threshold?: number;
+  /**
+   * Gamma (>= 1 darkens mid tones). Default 1 (no adjustment).
+   */
+  gamma?: number;
   commands: {
     init: string;
     center: string;
@@ -23,6 +32,8 @@ export class UniversalBluetoothPrinterService {
       name: 'EPPOS EPX-58B',
       width: 384,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -35,6 +46,8 @@ export class UniversalBluetoothPrinterService {
       name: 'XPRINTER XP-P300',
       width: 384,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -47,6 +60,8 @@ export class UniversalBluetoothPrinterService {
       name: 'HOIN HOP H58',
       width: 384,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -59,6 +74,8 @@ export class UniversalBluetoothPrinterService {
       name: 'BellaV EP-58A',
       width: 384,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -71,6 +88,8 @@ export class UniversalBluetoothPrinterService {
       name: 'Generic 58mm',
       width: 384,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -83,6 +102,8 @@ export class UniversalBluetoothPrinterService {
       name: 'Generic 80mm',
       width: 576,
       dpi: 203,
+      threshold: 165,
+      gamma: 1.25,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -236,14 +257,21 @@ export class UniversalBluetoothPrinterService {
             const data = imageData.data;
             let blackCount = 0;
             let whiteCount = 0;
+            const threshold = config.threshold ?? 150;
+            const gamma = config.gamma ?? 1;
+
             for (let i = 0; i < data.length; i += 4) {
               const r = data[i];
               const g = data[i + 1];
               const b = data[i + 2];
               // Use proper luminance formula
               const gray = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
-              // Force to pure black or white (threshold 128)
-              const value = gray < 128 ? 0 : 255;
+              // Apply gamma to darken mid-tones (gamma > 1 => darker)
+              const normalized = gray / 255;
+              const gammaCorrected = Math.pow(normalized, gamma);
+              const adjusted = Math.min(255, Math.max(0, Math.round(gammaCorrected * 255)));
+              // Force to pure black or white using configured threshold
+              const value = adjusted < threshold ? 0 : 255;
               data[i] = value;     // R
               data[i + 1] = value; // G
               data[i + 2] = value; // B
@@ -261,7 +289,9 @@ export class UniversalBluetoothPrinterService {
               totalPixels,
               blackPixels: blackCount,
               whitePixels: whiteCount,
-              blackPercentage: totalPixels > 0 ? ((blackCount / totalPixels) * 100).toFixed(2) + '%' : '0%'
+              blackPercentage: totalPixels > 0 ? ((blackCount / totalPixels) * 100).toFixed(2) + '%' : '0%',
+              threshold,
+              gamma
             });
             
             const bitmap = this.imageDataToEscPosBitmap(imageData);
