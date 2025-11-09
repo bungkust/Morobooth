@@ -241,16 +241,16 @@ export class HybridBluetoothPrinterService {
   }
 
   private arrayToBase64(arr: Uint8Array): string {
-    // Chunked conversion to avoid stack overflow with large arrays
-    const chunkSize = 8192;
-    let result = '';
-    
+    // Build the binary string in manageable chunks, then encode once.
+    const chunkSize = 0x8000; // 32k - safe for String.fromCharCode spreads
+    const segments: string[] = [];
+
     for (let i = 0; i < arr.length; i += chunkSize) {
-      const chunk = arr.slice(i, i + chunkSize);
-      result += btoa(String.fromCharCode(...chunk));
+      const chunk = arr.subarray(i, i + chunkSize);
+      segments.push(String.fromCharCode(...chunk));
     }
-    
-    return result;
+
+    return btoa(segments.join(''));
   }
 
   private applyOrderedDither(imageData: ImageData): void {

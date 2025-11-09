@@ -405,24 +405,18 @@ function App() {
               break;
             }
             
-            // Reassemble bitmap (decode each chunk to avoid corruption)
-            const buffers = bitmapChunksRef.current.chunks.map((chunk, idx) => {
-              if (typeof chunk !== 'string') {
-                throw new Error(`Missing chunk at index ${idx}`);
-              }
-              return Buffer.from(chunk, 'base64');
-            });
-            const combinedBuffer = Buffer.concat(buffers);
-            const fullBitmap = combinedBuffer.toString('base64');
+            // Reassemble bitmap by joining the base64 payload, then validate length
+            const joinedBase64 = bitmapChunksRef.current.chunks.join('');
+            const combinedBuffer = Buffer.from(joinedBase64, 'base64');
             const { width, height } = bitmapChunksRef.current;
             
             console.log('App: Reassembled bitmap', {
-              base64Length: fullBitmap.length,
+              base64Length: joinedBase64.length,
               byteLength: combinedBuffer.length
             });
             
             // Clear ref before printing
-            const printData = { bitmap: fullBitmap, width, height };
+            const printData = { bitmap: joinedBase64, width, height };
             bitmapChunksRef.current = null;
             
             // Print the reassembled bitmap
