@@ -13,6 +13,10 @@ export interface PrinterConfig {
    * Gamma (>= 1 darkens mid tones). Default 1 (no adjustment).
    */
   gamma?: number;
+  /**
+   * Optional flag to enable error-diffusion dithering (Floyd-Steinberg)
+   */
+  dithering?: boolean;
   commands: {
     init: string;
     center: string;
@@ -34,6 +38,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -48,6 +53,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -62,6 +68,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -76,6 +83,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -90,6 +98,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -104,6 +113,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
+      dithering: true,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -259,6 +269,7 @@ export class UniversalBluetoothPrinterService {
             let whiteCount = 0;
             const threshold = config.threshold ?? 150;
             const gamma = config.gamma ?? 1;
+            const applyDithering = config.dithering ?? false;
 
             for (let i = 0; i < data.length; i += 4) {
               const r = data[i];
@@ -270,17 +281,38 @@ export class UniversalBluetoothPrinterService {
               const normalized = gray / 255;
               const gammaCorrected = Math.pow(normalized, gamma);
               const adjusted = Math.min(255, Math.max(0, Math.round(gammaCorrected * 255)));
-              // Force to pure black or white using configured threshold
-              const value = adjusted < threshold ? 0 : 255;
-              data[i] = value;     // R
-              data[i + 1] = value; // G
-              data[i + 2] = value; // B
-              // Alpha stays the same
-              
-              if (value < 128) blackCount++;
-              else whiteCount++;
+
+              // For dithering, defer thresholding after error diffusion; for non-dither just threshold now
+              if (!applyDithering) {
+                const value = adjusted < threshold ? 0 : 255;
+                data[i] = value;     // R
+                data[i + 1] = value; // G
+                data[i + 2] = value; // B
+                if (value < 128) blackCount++;
+                else whiteCount++;
+              } else {
+                // Temporarily store adjusted grayscale in channels (R=G=B)
+                data[i] = adjusted;
+                data[i + 1] = adjusted;
+                data[i + 2] = adjusted;
+              }
             }
             
+            if (applyDithering) {
+              // Apply Floyd-Steinberg dithering on the temporary grayscale values
+              this.applyFloydSteinbergDither(imageData, threshold);
+
+              // After dithering, update stats and clamp to pure B/W
+              for (let i = 0; i < data.length; i += 4) {
+                const value = data[i] < threshold ? 0 : 255;
+                data[i] = value;
+                data[i + 1] = value;
+                data[i + 2] = value;
+                if (value < 128) blackCount++;
+                else whiteCount++;
+              }
+            }
+
             // Debug logging for image conversion
             const totalPixels = blackCount + whiteCount;
             console.log('Image conversion stats:', {
@@ -291,7 +323,8 @@ export class UniversalBluetoothPrinterService {
               whitePixels: whiteCount,
               blackPercentage: totalPixels > 0 ? ((blackCount / totalPixels) * 100).toFixed(2) + '%' : '0%',
               threshold,
-              gamma
+              gamma,
+              dithering: applyDithering
             });
             
             const bitmap = this.imageDataToEscPosBitmap(imageData);
@@ -427,6 +460,44 @@ export class UniversalBluetoothPrinterService {
     console.log(
       `Sent ${label} in ${totalChunks} chunk${totalChunks > 1 ? 's' : ''} (${data.length} bytes)`
     );
+  }
+
+  private applyFloydSteinbergDither(imageData: ImageData, threshold: number): void {
+    const { data, width, height } = imageData;
+
+    const clamp = (value: number) => Math.min(255, Math.max(0, value));
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = (y * width + x) * 4;
+        const oldPixel = data[idx];
+        const newPixel = oldPixel < threshold ? 0 : 255;
+        const error = oldPixel - newPixel;
+
+        data[idx] = newPixel;
+        data[idx + 1] = newPixel;
+        data[idx + 2] = newPixel;
+
+        const distribute = (offsetX: number, offsetY: number, factor: number) => {
+          const newX = x + offsetX;
+          const newY = y + offsetY;
+          if (newX >= 0 && newX < width && newY >= 0 && newY < height) {
+            const targetIdx = (newY * width + newX) * 4;
+            const updated = data[targetIdx] + error * factor;
+            const clamped = clamp(updated);
+            data[targetIdx] = clamped;
+            data[targetIdx + 1] = clamped;
+            data[targetIdx + 2] = clamped;
+          }
+        };
+
+        // Floyd-Steinberg diffusion coefficients
+        distribute(1, 0, 7 / 16);
+        distribute(-1, 1, 3 / 16);
+        distribute(0, 1, 5 / 16);
+        distribute(1, 1, 1 / 16);
+      }
+    }
   }
 }
 
