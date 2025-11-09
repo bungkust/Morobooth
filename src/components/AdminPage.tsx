@@ -1,4 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+
+declare global {
+  interface Window {
+    MoroboothBundleVersion?: string;
+  }
+}
 import { 
   getCurrentSession, 
   createSession, 
