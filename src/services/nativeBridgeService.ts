@@ -27,7 +27,13 @@ export class NativeBridgeService {
       const chunkSize = 5000; // Safe limit accounting for JSON overhead
       const totalChunks = Math.ceil(base64.length / chunkSize);
       
-      console.log(`Splitting bitmap into ${totalChunks} chunks, total size: ${base64.length} bytes`);
+      console.log('Bridge: preparing print payload', {
+        totalChunks,
+        totalLength: base64.length,
+        width: data.width,
+        height: data.height,
+        chunkSize
+      });
       
       // Send first chunk as START message
       const firstChunk = base64.slice(0, chunkSize);
@@ -45,7 +51,12 @@ export class NativeBridgeService {
       
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify(startMessage));
-        console.log(`Sending chunk 0/${totalChunks - 1}, size: ${firstChunk.length} bytes, isLast: ${totalChunks === 1}`);
+        console.log('Bridge: sent START chunk', {
+          chunkIndex: 0,
+          totalChunks,
+          chunkLength: firstChunk.length,
+          isLast: totalChunks === 1
+        });
       }
       
       // Send subsequent chunks with delay
@@ -67,7 +78,12 @@ export class NativeBridgeService {
           
           if (window.ReactNativeWebView) {
             window.ReactNativeWebView.postMessage(JSON.stringify(chunkMessage));
-            console.log(`Sending chunk ${i}/${totalChunks - 1}, size: ${chunk.length} bytes, isLast: ${isLast}`);
+            console.log('Bridge: sent CHUNK', {
+              chunkIndex: i,
+              totalChunks,
+              chunkLength: chunk.length,
+              isLast
+            });
           }
         }, i * 10); // 10ms delay between chunks
       }

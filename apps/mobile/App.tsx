@@ -318,6 +318,13 @@ function App() {
             startTime: Date.now()
           };
           
+          console.log('App: START chunk received', {
+            totalChunks: message.data.totalChunks,
+            width: message.data.width,
+            height: message.data.height,
+            firstChunkLength: message.data.bitmapBase64.length
+          });
+          
           // Store first chunk
           bitmapChunksRef.current.chunks[0] = message.data.bitmapBase64;
           
@@ -372,7 +379,12 @@ function App() {
           const chunkIndex = message.data.chunkIndex;
           bitmapChunksRef.current.chunks[chunkIndex] = message.data.bitmapBase64;
           
-          console.log(`App: Received chunk ${chunkIndex}/${bitmapChunksRef.current.totalChunks - 1}, size: ${message.data.bitmapBase64.length} bytes`);
+          console.log('App: CHUNK received', {
+            chunkIndex,
+            totalChunks: bitmapChunksRef.current.totalChunks,
+            chunkLength: message.data.bitmapBase64.length,
+            elapsedMs: elapsed
+          });
           
           // Check if this is the last chunk
           if (message.data.isLast) {
@@ -440,10 +452,11 @@ function App() {
             break;
           }
 
-          console.log(
-            'App: Legacy PRINT_DITHERED_BITMAP received, base64 length:',
-            message.data.bitmapBase64.length
-          );
+          console.log('App: Legacy PRINT_DITHERED_BITMAP received', {
+            base64Length: message.data.bitmapBase64.length,
+            width: message.data.width,
+            height: message.data.height
+          });
 
           await handlePrintBitmap(
             message.data.bitmapBase64,
@@ -629,6 +642,12 @@ function App() {
       if (!connectedDevice) {
         throw new Error('No printer connected');
       }
+
+      console.log('App: handlePrintBitmap', {
+        base64Length: bitmapBase64.length,
+        width,
+        height
+      });
       
       // Show progress
       sendMessageToWebView({
@@ -637,6 +656,7 @@ function App() {
       });
       
       const success = await printer.printDitheredBitmap(bitmapBase64, width, height);
+      console.log('App: print result', { success });
       
       sendMessageToWebView({
         type: success ? 'PRINT_SUCCESS' : 'PRINT_FAILED',

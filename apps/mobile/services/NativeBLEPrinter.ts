@@ -277,6 +277,11 @@ export class NativeBLEPrinter {
 
       // Use ESC/POS raster bit image (GS v 0) for broader compatibility
       const escposCommands = this.generateRasterFromBitmap(pixels, width, height);
+      console.log('Native raster payload stats:', {
+        totalBytes: escposCommands.length,
+        dataBytes: escposCommands.length - 8, // approximate after header
+        chunkSize: this.mtu
+      });
       
       // Send in optimized chunks
       const chunkSize = this.mtu;
@@ -287,6 +292,13 @@ export class NativeBLEPrinter {
         const writeMethod = this.characteristicProperties?.WriteWithoutResponse
           ? 'writeWithoutResponse'
           : 'write';
+        
+        console.log('Native: sending chunk', {
+          offset: i,
+          chunkBytes: chunk.length,
+          base64Length: base64Chunk.length,
+          writeMethod
+        });
         
         await BleManager[writeMethod](
           this.connectedDeviceId,
@@ -329,6 +341,12 @@ export class NativeBLEPrinter {
     const yH = (height >> 8) & 0xFF;
     
     commands.push(0x1D, 0x76, 0x30, mode, xL, xH, yL, yH);
+    console.log('Native: raster header', {
+      mode,
+      bytesPerRow,
+      width,
+      height
+    });
       
     // Build data row-wise; each byte packs 8 horizontal pixels, MSB first
     for (let y = 0; y < height; y++) {
