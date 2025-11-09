@@ -9,6 +9,7 @@ import * as Sentry from '@sentry/react-native';
 import { NativeBLEPrinter, PrinterDevice } from './services/NativeBLEPrinter';
 import { PrinterSelectionModal } from './components/PrinterSelectionModal';
 import { PrinterStorage } from './services/PrinterStorage';
+import { Buffer } from 'buffer';
 
 const WEBVIEW_URL = Constants.expoConfig?.extra?.webviewUrl || 'https://morobooth.netlify.app';
 
@@ -404,11 +405,21 @@ function App() {
               break;
             }
             
-            // Reassemble bitmap
-            const fullBitmap = bitmapChunksRef.current.chunks.join('');
+            // Reassemble bitmap (decode each chunk to avoid corruption)
+            const buffers = bitmapChunksRef.current.chunks.map((chunk, idx) => {
+              if (typeof chunk !== 'string') {
+                throw new Error(`Missing chunk at index ${idx}`);
+              }
+              return Buffer.from(chunk, 'base64');
+            });
+            const combinedBuffer = Buffer.concat(buffers);
+            const fullBitmap = combinedBuffer.toString('base64');
             const { width, height } = bitmapChunksRef.current;
             
-            console.log(`App: Reassembled bitmap, length: ${fullBitmap.length} bytes`);
+            console.log('App: Reassembled bitmap', {
+              base64Length: fullBitmap.length,
+              byteLength: combinedBuffer.length
+            });
             
             // Clear ref before printing
             const printData = { bitmap: fullBitmap, width, height };
