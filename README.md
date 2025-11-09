@@ -214,6 +214,27 @@ eas build --platform ios
    - Configure `eas.json` with your signing certificates
    - See `apps/mobile/BUILD-GUIDE.md` for detailed instructions
 
+### Bundle Version Automation
+
+Every merge to `main` should bump the Expo bundle metadata so mobile testers can confirm they are running the latest build.
+
+- Prepare the version string and patch `apps/mobile/app.json` with:
+
+  ```bash
+  pnpm run bump:bundle
+  # or: npm run bump:bundle / yarn bump:bundle
+  ```
+
+- The script performs two actions:
+  1. Increments `expo.version` (patch segment).
+  2. Sets `expo.extra.bundleVersion` to `<YYYYMMDD>-<HHMMSS>-<shortGitSha>`.
+
+- The value is exposed at runtime through:
+  - Logcat (`App bundle version: ...`)
+  - Admin login header (`Bundle: ...`)
+
+Add this command to your CI pipeline (e.g., post-merge hook) to ensure every production bundle carries a unique identifier.
+
 ## Development
 
 ### Required Permissions

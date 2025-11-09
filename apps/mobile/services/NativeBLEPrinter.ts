@@ -277,14 +277,16 @@ export class NativeBLEPrinter {
 
       // Use ESC/POS raster bit image (GS v 0) for broader compatibility
       const escposCommands = this.generateRasterFromBitmap(pixels, width, height);
+      // Determine BLE chunk size (cap to 182 bytes for broader compatibility)
+      const chunkSize = Math.min(this.mtu, 182);
       console.log('Native raster payload stats:', {
         totalBytes: escposCommands.length,
         dataBytes: escposCommands.length - 8, // approximate after header
-        chunkSize: this.mtu
+        negotiatedMtu: this.mtu,
+        chunkSize
       });
       
       // Send in optimized chunks
-      const chunkSize = this.mtu;
       for (let i = 0; i < escposCommands.length; i += chunkSize) {
         const chunk = escposCommands.slice(i, i + chunkSize);
         const base64Chunk = Buffer.from(chunk).toString('base64');

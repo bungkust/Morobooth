@@ -12,6 +12,12 @@ import { PrinterStorage } from './services/PrinterStorage';
 import { Buffer } from 'buffer';
 
 const WEBVIEW_URL = Constants.expoConfig?.extra?.webviewUrl || 'https://morobooth.netlify.app';
+const BUNDLE_VERSION =
+  Constants.expoConfig?.extra?.bundleVersion ?? Constants.expoConfig?.version ?? 'dev';
+
+if (typeof window !== 'undefined') {
+  (window as any).MoroboothBundleVersion = BUNDLE_VERSION;
+}
 
 // Initialize Sentry
 if (Constants.expoConfig?.extra?.sentryDsn) {
@@ -39,6 +45,7 @@ function App() {
   } | null>(null);
 
   useEffect(() => {
+    console.log('App bundle version:', BUNDLE_VERSION);
     initializeApp();
     setupDeepLinking();
     setupBackHandler();

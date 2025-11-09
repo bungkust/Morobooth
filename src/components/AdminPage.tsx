@@ -51,6 +51,7 @@ export const AdminPage = () => {
   const [bluetoothError, setBluetoothError] = useState<string>('');
   const [printerInfo, setPrinterInfo] = useState<any>(null);
   const [testPrintLoading, setTestPrintLoading] = useState(false);
+  const [bundleVersion, setBundleVersion] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -91,6 +92,7 @@ export const AdminPage = () => {
   // Initialize native bridge
   useEffect(() => {
     nativeBridge.init();
+    setBundleVersion(window?.MoroboothBundleVersion ?? null);
     
     // Check native environment
     console.log('AdminPage: window.isNativeApp =', window.isNativeApp);
@@ -370,6 +372,11 @@ export const AdminPage = () => {
       <div className="admin-container">
         <div className="admin-header">
           <h1>Admin Panel</h1>
+          {bundleVersion && (
+            <span className="bundle-version">
+              Bundle: {bundleVersion}
+            </span>
+          )}
           <button onClick={() => window.location.href = '/'} className="back-btn">
             ← Back to Booth
           </button>
