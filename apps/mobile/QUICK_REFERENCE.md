@@ -168,10 +168,13 @@ Quick tests to verify everything works:
    - Item: Kopi Susu Gula Aren, Es Kopi Hitam, Roti Bakar Keju
    - Total dengan service charge 5%
 5. Kertas keluar dengan teks jelas + garis pembatas
-6. Jika kertas kosong:
+6. `adb logcat | grep ReactNativeJS` harus menampilkan:
+   - `PRINT_DITHERED_BITMAP_START` diikuti beberapa `PRINT_DITHERED_BITMAP_CHUNK`
+   - `App: Legacy PRINT_DITHERED_BITMAP received...` hanya kalau build lama masih aktif
+7. Jika kertas kosong:
    - Cek koneksi Bluetooth (disconnect lalu connect lagi)
    - Pastikan printer support ESC/POS & thermal mode
-   - Lihat log browser untuk chunk write error / payload kosong
+   - Cek console browser (`Sent payload in N chunks`) & `adb` untuk chunk yang hilang / payload kosong
 
 ---
 

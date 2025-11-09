@@ -414,6 +414,44 @@ function App() {
           });
           break;
           
+        case 'PRINT_DITHERED_BITMAP':
+          if (!connectedDevice) {
+            console.log('App: Legacy print message received but no printer connected');
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: {
+                success: false,
+                error: 'No printer connected. Please connect to a printer first.',
+                needsConnection: true
+              }
+            });
+            break;
+          }
+
+          if (!message.data?.bitmapBase64) {
+            console.error('App: Legacy PRINT_DITHERED_BITMAP missing bitmapBase64 payload');
+            sendMessageToWebView({
+              type: 'PRINT_FAILED',
+              data: {
+                success: false,
+                error: 'Invalid print payload received'
+              }
+            });
+            break;
+          }
+
+          console.log(
+            'App: Legacy PRINT_DITHERED_BITMAP received, base64 length:',
+            message.data.bitmapBase64.length
+          );
+
+          await handlePrintBitmap(
+            message.data.bitmapBase64,
+            message.data.width ?? defaultPrinterWidth,
+            message.data.height ?? Math.floor((message.data.bitmapBase64.length * 8) / (message.data.width ?? defaultPrinterWidth))
+          );
+          break;
+
         default:
           console.log('Unknown message:', message.type);
       }
