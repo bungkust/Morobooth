@@ -282,6 +282,7 @@ export class NativeBLEPrinter {
       const chunkSize = this.mtu;
       for (let i = 0; i < escposCommands.length; i += chunkSize) {
         const chunk = escposCommands.slice(i, i + chunkSize);
+        const base64Chunk = Buffer.from(chunk).toString('base64');
         
         const writeMethod = this.characteristicProperties?.WriteWithoutResponse
           ? 'writeWithoutResponse'
@@ -291,7 +292,7 @@ export class NativeBLEPrinter {
           this.connectedDeviceId,
           this.serviceUUID,
           this.characteristicUUID,
-          Array.from(chunk)
+          base64Chunk as any
         );
         
         // Adaptive delay based on chunk size
