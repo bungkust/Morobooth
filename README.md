@@ -216,24 +216,22 @@ eas build --platform ios
 
 ### Bundle Version Automation
 
-Every merge to `main` should bump the Expo bundle metadata so mobile testers can confirm they are running the latest build.
+Every merge into `main` automatically bumps the Expo bundle metadata so testers can confirm they are running the latest build.
 
-- Prepare the version string and patch `apps/mobile/app.json` with:
-
-  ```bash
-  pnpm run bump:bundle
-  # or: npm run bump:bundle / yarn bump:bundle
-  ```
-
-- The script performs two actions:
-  1. Increments `expo.version` (patch segment).
-  2. Sets `expo.extra.bundleVersion` to `<YYYYMMDD>-<HHMMSS>-<shortGitSha>`.
-
-- The value is exposed at runtime through:
+- A Husky `post-merge` hook now runs `node ./scripts/bumpBundleVersion.cjs` whenever the current branch is `main`.
+- The hook increments `expo.version` (patch segment) and updates `expo.extra.bundleVersion` to `<YYYYMMDD>-<HHMMSS>-<shortGitSha>`.
+- The updated value appears in:
   - Logcat (`App bundle version: ...`)
   - Admin login header (`Bundle: ...`)
 
-Add this command to your CI pipeline (e.g., post-merge hook) to ensure every production bundle carries a unique identifier.
+> **Note:** After pulling changes you must run `npm install` (or `pnpm install`) once so Husky installs the Git hooks locally.
+
+In case you need to bump manually (e.g., CI environments without Git hooks), you can still run:
+
+```bash
+pnpm run bump:bundle
+# or: npm run bump:bundle / yarn bump:bundle
+```
 
 ## Development
 

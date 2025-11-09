@@ -1,0 +1,18 @@
+#!/usr/bin/env sh
+
+# Only run when the current branch is main
+branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)"
+
+if [ "$branch" != "main" ]; then
+  echo "husky(post-merge): skipping bundle bump (branch: $branch)"
+  exit 0
+fi
+
+echo "husky(post-merge): updating Expo bundle version..."
+
+if node ./scripts/bumpBundleVersion.cjs; then
+  echo "husky(post-merge): bundle metadata updated."
+else
+  echo "husky(post-merge): bundle bump failed. Please run 'npm run bump:bundle' manually." >&2
+fi
+
