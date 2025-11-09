@@ -359,6 +359,11 @@ export const AdminPage = () => {
       <div className="admin-page">
         <div className="admin-login">
           <h1>Admin Panel</h1>
+          {bundleVersion && (
+            <p className="bundle-version">
+              Bundle: {bundleVersion}
+            </p>
+          )}
           {error && <div className="error-message">{error}</div>}
           <input
             type="password"
