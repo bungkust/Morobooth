@@ -289,31 +289,51 @@ export class NativeBLEPrinter {
       // Send in optimized chunks
       for (let i = 0; i < escposCommands.length; i += chunkSize) {
         const chunk = escposCommands.slice(i, i + chunkSize);
-        const base64Chunk = Buffer.from(chunk).toString('base64');
-        
+        const chunkArray = Array.from(chunk);
+
         const writeMethod = this.characteristicProperties?.WriteWithoutResponse
           ? 'writeWithoutResponse'
           : 'write';
-        
+
         console.log('Native: sending chunk', {
           offset: i,
           chunkBytes: chunk.length,
-          base64Length: base64Chunk.length,
           writeMethod
         });
-        
-        await BleManager[writeMethod](
-          this.connectedDeviceId,
-          this.serviceUUID,
-          this.characteristicUUID,
-          base64Chunk as any
-        );
-        
+
+        try {
+          if (writeMethod === 'writeWithoutResponse') {
+            await BleManager.writeWithoutResponse(
+              this.connectedDeviceId,
+              this.serviceUUID,
+              this.characteristicUUID,
+              chunkArray,
+              chunkArray.length,
+              chunkSize >= 150 ? 30 : 10
+            );
+          } else {
+            await BleManager.write(
+              this.connectedDeviceId,
+              this.serviceUUID,
+              this.characteristicUUID,
+              chunkArray
+            );
+          }
+        } catch (err) {
+          console.error('Native: chunk write failed', {
+            offset: i,
+            chunkBytes: chunk.length,
+            writeMethod,
+            error: err instanceof Error ? err.message : err
+          });
+          throw err;
+        }
+
         // Adaptive delay based on chunk size
         if (chunkSize < 100) {
           await new Promise(r => setTimeout(r, 50));
         } else {
-          await new Promise(r => setTimeout(r, 20));
+          await new Promise(r => setTimeout(r, 30));
         }
       }
       
