@@ -38,7 +38,7 @@ export class UniversalBluetoothPrinterService {
       dpi: 203,
       threshold: 165,
       gamma: 1.25,
-      dithering: true,
+      dithering: false,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
