@@ -21,6 +21,10 @@ export interface PrinterConfig {
    * Optional sharpen amount (0-1). Applies simple unsharp mask before thresholding.
    */
   sharpen?: number;
+  /**
+   * Radius in pixels for the unsharp mask (1 => 3x3, 2 => 5x5). Defaults to 1.
+   */
+  sharpenRadius?: number;
   commands: {
     init: string;
     center: string;
@@ -43,7 +47,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: false,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -59,7 +64,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -75,7 +81,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -91,7 +98,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -107,7 +115,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -123,7 +132,8 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
-      sharpen: 0.45,
+      sharpen: 0.65,
+      sharpenRadius: 1,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -274,8 +284,9 @@ export class UniversalBluetoothPrinterService {
             const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
             const sharpenAmount = config.sharpen ?? 0;
+            const sharpenRadius = config.sharpenRadius ?? 1;
             if (sharpenAmount > 0) {
-              this.applySharpen(imageData, sharpenAmount);
+              this.applyUnsharpMask(imageData, sharpenAmount, sharpenRadius);
             }
             
             // Force pure black/white conversion for thermal printer
@@ -340,6 +351,7 @@ export class UniversalBluetoothPrinterService {
               threshold,
               gamma,
               sharpen: sharpenAmount,
+              sharpenRadius,
               dithering: applyDithering
             });
             
@@ -484,43 +496,97 @@ export class UniversalBluetoothPrinterService {
     return Math.round(value);
   }
 
-  private applySharpen(imageData: ImageData, amount = 0.5): void {
-    const strength = Math.min(Math.max(amount, 0), 1);
+  private applyUnsharpMask(imageData: ImageData, amount = 0.5, radius = 1): void {
+    const strength = Math.min(Math.max(amount, 0), 2);
+    const blurRadius = Math.max(1, Math.round(radius));
     if (strength <= 0) return;
 
     const { data, width, height } = imageData;
     const original = new Uint8ClampedArray(data);
-    const kernel = [
-      0, -strength, 0,
-      -strength, 1 + 4 * strength, -strength,
-      0, -strength, 0
-    ];
+    const blurred = this.gaussianBlur(original, width, height, blurRadius);
 
+    for (let i = 0; i < data.length; i += 4) {
+      const r = original[i];
+      const g = original[i + 1];
+      const b = original[i + 2];
+
+      const br = blurred[i];
+      const bg = blurred[i + 1];
+      const bb = blurred[i + 2];
+
+      data[i] = this.clampByte(r + strength * (r - br));
+      data[i + 1] = this.clampByte(g + strength * (g - bg));
+      data[i + 2] = this.clampByte(b + strength * (b - bb));
+      data[i + 3] = original[i + 3];
+    }
+  }
+
+  private gaussianBlur(
+    source: Uint8ClampedArray,
+    width: number,
+    height: number,
+    radius: number
+  ): Uint8ClampedArray {
+    const kernel = this.getGaussianKernel(radius);
+    const kernelSum = kernel.reduce((sum, value) => sum + value, 0);
+    const temp = new Float32Array(width * height * 4);
+    const output = new Uint8ClampedArray(width * height * 4);
+
+    // Horizontal pass
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        let r = 0;
-        let g = 0;
-        let b = 0;
-
-        for (let ky = -1; ky <= 1; ky++) {
-          const sampleY = Math.min(height - 1, Math.max(0, y + ky));
-          for (let kx = -1; kx <= 1; kx++) {
-            const sampleX = Math.min(width - 1, Math.max(0, x + kx));
-            const weight = kernel[(ky + 1) * 3 + (kx + 1)];
-            const idx = (sampleY * width + sampleX) * 4;
-            r += original[idx] * weight;
-            g += original[idx + 1] * weight;
-            b += original[idx + 2] * weight;
+        for (let channel = 0; channel < 3; channel++) {
+          let acc = 0;
+          for (let k = -radius; k <= radius; k++) {
+            const sampleX = Math.min(width - 1, Math.max(0, x + k));
+            const weight = kernel[k + radius];
+            const idx = (y * width + sampleX) * 4 + channel;
+            acc += source[idx] * weight;
           }
+          const destIdx = (y * width + x) * 4 + channel;
+          temp[destIdx] = acc / kernelSum;
         }
-
-        const destIdx = (y * width + x) * 4;
-        data[destIdx] = this.clampByte(r);
-        data[destIdx + 1] = this.clampByte(g);
-        data[destIdx + 2] = this.clampByte(b);
-        data[destIdx + 3] = original[destIdx + 3];
+        // Copy alpha unchanged
+        const alphaIdx = (y * width + x) * 4 + 3;
+        temp[alphaIdx] = source[alphaIdx];
       }
     }
+
+    // Vertical pass
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        for (let channel = 0; channel < 3; channel++) {
+          let acc = 0;
+          for (let k = -radius; k <= radius; k++) {
+            const sampleY = Math.min(height - 1, Math.max(0, y + k));
+            const weight = kernel[k + radius];
+            const idx = (sampleY * width + x) * 4 + channel;
+            acc += temp[idx] * weight;
+          }
+          const destIdx = (y * width + x) * 4 + channel;
+          output[destIdx] = this.clampByte(acc / kernelSum);
+        }
+        const alphaIdx = (y * width + x) * 4 + 3;
+        output[alphaIdx] = source[alphaIdx];
+      }
+    }
+
+    return output;
+  }
+
+  private getGaussianKernel(radius: number): number[] {
+    if (radius <= 1) {
+      return [1, 2, 1];
+    }
+    if (radius === 2) {
+      return [1, 4, 6, 4, 1];
+    }
+    // For radius > 2, approximate with binomial coefficients up to radius 3
+    if (radius === 3) {
+      return [1, 6, 15, 20, 15, 6, 1];
+    }
+    // Fallback to radius 3 kernel for larger values to avoid excessive computation
+    return [1, 6, 15, 20, 15, 6, 1];
   }
 
   private applyFloydSteinbergDither(imageData: ImageData, threshold: number): void {
