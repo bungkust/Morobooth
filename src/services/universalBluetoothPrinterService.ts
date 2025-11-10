@@ -36,9 +36,9 @@ export class UniversalBluetoothPrinterService {
       name: 'EPPOS EPX-58B',
       width: 384,
       dpi: 203,
-      threshold: 165,
-      gamma: 1.25,
-      dithering: false,
+      threshold: 150,
+      gamma: 1,
+      dithering: ,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
