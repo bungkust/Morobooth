@@ -17,6 +17,10 @@ export interface PrinterConfig {
    * Optional flag to enable error-diffusion dithering (Floyd-Steinberg)
    */
   dithering?: boolean;
+  /**
+   * Optional sharpen amount (0-1). Applies simple unsharp mask before thresholding.
+   */
+  sharpen?: number;
   commands: {
     init: string;
     center: string;
@@ -36,9 +40,10 @@ export class UniversalBluetoothPrinterService {
       name: 'EPPOS EPX-58B',
       width: 384,
       dpi: 203,
-      threshold: 150,
-      gamma: 1,
-      dithering: ,
+      threshold: 165,
+      gamma: 1.25,
+      dithering: false,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -54,6 +59,7 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -69,6 +75,7 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -84,6 +91,7 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -99,6 +107,7 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -114,6 +123,7 @@ export class UniversalBluetoothPrinterService {
       threshold: 165,
       gamma: 1.25,
       dithering: true,
+      sharpen: 0.45,
       commands: {
         init: '\x1B\x40',
         center: '\x1B\x61\x01',
@@ -262,6 +272,11 @@ export class UniversalBluetoothPrinterService {
             
             ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
             const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+
+            const sharpenAmount = config.sharpen ?? 0;
+            if (sharpenAmount > 0) {
+              this.applySharpen(imageData, sharpenAmount);
+            }
             
             // Force pure black/white conversion for thermal printer
             const data = imageData.data;
@@ -324,6 +339,7 @@ export class UniversalBluetoothPrinterService {
               blackPercentage: totalPixels > 0 ? ((blackCount / totalPixels) * 100).toFixed(2) + '%' : '0%',
               threshold,
               gamma,
+              sharpen: sharpenAmount,
               dithering: applyDithering
             });
             
@@ -460,6 +476,51 @@ export class UniversalBluetoothPrinterService {
     console.log(
       `Sent ${label} in ${totalChunks} chunk${totalChunks > 1 ? 's' : ''} (${data.length} bytes)`
     );
+  }
+
+  private clampByte(value: number): number {
+    if (value < 0) return 0;
+    if (value > 255) return 255;
+    return Math.round(value);
+  }
+
+  private applySharpen(imageData: ImageData, amount = 0.5): void {
+    const strength = Math.min(Math.max(amount, 0), 1);
+    if (strength <= 0) return;
+
+    const { data, width, height } = imageData;
+    const original = new Uint8ClampedArray(data);
+    const kernel = [
+      0, -strength, 0,
+      -strength, 1 + 4 * strength, -strength,
+      0, -strength, 0
+    ];
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let r = 0;
+        let g = 0;
+        let b = 0;
+
+        for (let ky = -1; ky <= 1; ky++) {
+          const sampleY = Math.min(height - 1, Math.max(0, y + ky));
+          for (let kx = -1; kx <= 1; kx++) {
+            const sampleX = Math.min(width - 1, Math.max(0, x + kx));
+            const weight = kernel[(ky + 1) * 3 + (kx + 1)];
+            const idx = (sampleY * width + sampleX) * 4;
+            r += original[idx] * weight;
+            g += original[idx + 1] * weight;
+            b += original[idx + 2] * weight;
+          }
+        }
+
+        const destIdx = (y * width + x) * 4;
+        data[destIdx] = this.clampByte(r);
+        data[destIdx + 1] = this.clampByte(g);
+        data[destIdx + 2] = this.clampByte(b);
+        data[destIdx + 3] = original[destIdx + 3];
+      }
+    }
   }
 
   private applyFloydSteinbergDither(imageData: ImageData, threshold: number): void {
