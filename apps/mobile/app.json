@@ -3,7 +3,7 @@
     "name": "Morobooth",
     "slug": "morobooth",
     "description": "A modern photo booth app that captures instant photos and prints them via Bluetooth thermal printers",
-    "version": "1.0.8",
+    "version": "1.0.9",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -72,7 +72,7 @@
     "extra": {
       "webviewUrl": "https://morobooth.netlify.app",
       "sentryDsn": "",
-      "bundleVersion": "20251110-194326-c4552e2",
+      "bundleVersion": "20251111-225103-871fe0b",
       "eas": {
         "projectId": "efabbd7b-7d2c-48de-9fd6-03092db248de"
       }

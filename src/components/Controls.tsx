@@ -35,7 +35,7 @@ export const Controls: React.FC<ControlsProps> = ({
           <button className="retake-button" onClick={onRetake}>
             RETAKE
           </button>
-          {isNativeApp ? (
+        {isNativeApp ? (
             <button className="print-button" onClick={onPrint}>
               PRINT
             </button>
@@ -45,13 +45,6 @@ export const Controls: React.FC<ControlsProps> = ({
             </button>
           )}
         </div>
-        {!isNativeApp && (
-          <div className="button-row">
-            <button className="print-button" onClick={onPrint}>
-              PRINT
-            </button>
-          </div>
-        )}
       </div>
     );
   }
