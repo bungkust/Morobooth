@@ -1096,44 +1096,6 @@ button:disabled {
   font-size: 12px;
 }
 
-/* Print progress indicator */
-.print-progress {
-  background: #e3f2fd;
-  color: #1976d2;
-  border: 3px solid var(--c-black);
-  box-shadow: 4px 4px 0 0 var(--c-black);
-  padding: 8px 10px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.progress-bar {
-  height: 4px;
-  background: #1976d2;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-@media (max-width: 480px) {
-  .print-progress {
-    font-size: 11px;
-    padding: 6px 8px;
-  }
-}
-    right: 8px;
-    gap: 6px;
-  }
-  .bluetooth-btn {
-    font-size: 12px;
-    padding: 6px 10px;
-  }
-  .bluetooth-status {
-    padding: 8px 10px;
-  }
-}
-
 /* Admin Page - Tab-based Layout with Bottom Navigation */
 .admin-page {
   position: fixed;

@@ -14,13 +14,15 @@ import { Buffer } from 'buffer';
 const WEBVIEW_URL = Constants.expoConfig?.extra?.webviewUrl || 'https://morobooth.netlify.app';
 const BUNDLE_VERSION =
   Constants.expoConfig?.extra?.bundleVersion ?? Constants.expoConfig?.version ?? 'dev';
+const HAS_SENTRY_DSN = Boolean(Constants.expoConfig?.extra?.sentryDsn);
+const DEFAULT_PRINTER_WIDTH = 384;
 
 if (typeof window !== 'undefined') {
   (window as any).MoroboothBundleVersion = BUNDLE_VERSION;
 }
 
 // Initialize Sentry
-if (Constants.expoConfig?.extra?.sentryDsn) {
+if (HAS_SENTRY_DSN) {
   Sentry.init({
     dsn: Constants.expoConfig.extra.sentryDsn,
     debug: __DEV__,
@@ -51,11 +53,33 @@ function App() {
     setupBackHandler();
     
     // Keep screen awake during photo sessions
-    KeepAwake.activateKeepAwake();
+    const keepAwakeModule = KeepAwake as any;
+    if (typeof keepAwakeModule.activateKeepAwakeAsync === 'function') {
+      keepAwakeModule.activateKeepAwakeAsync().catch((err: unknown) =>
+        console.warn('Failed to activate keep awake', err)
+      );
+    } else if (typeof keepAwakeModule.activateKeepAwake === 'function') {
+      try {
+        keepAwakeModule.activateKeepAwake();
+      } catch (err) {
+        console.warn('Failed to activate keep awake', err);
+      }
+    }
     
     return () => {
       printer.cleanup();
-      KeepAwake.deactivateKeepAwake();
+
+      if (typeof keepAwakeModule.deactivateKeepAwakeAsync === 'function') {
+        keepAwakeModule.deactivateKeepAwakeAsync().catch((err: unknown) =>
+          console.warn('Failed to deactivate keep awake', err)
+        );
+      } else if (typeof keepAwakeModule.deactivateKeepAwake === 'function') {
+        try {
+          keepAwakeModule.deactivateKeepAwake();
+        } catch (err) {
+          console.warn('Failed to deactivate keep awake', err);
+        }
+      }
     };
   }, []);
 
@@ -472,8 +496,11 @@ function App() {
 
           await handlePrintBitmap(
             message.data.bitmapBase64,
-            message.data.width ?? defaultPrinterWidth,
-            message.data.height ?? Math.floor((message.data.bitmapBase64.length * 8) / (message.data.width ?? defaultPrinterWidth))
+            message.data.width ?? DEFAULT_PRINTER_WIDTH,
+            message.data.height ?? Math.floor(
+              (message.data.bitmapBase64.length * 8) /
+                (message.data.width ?? DEFAULT_PRINTER_WIDTH)
+            )
           );
           break;
 
@@ -698,8 +725,16 @@ function App() {
     window.isNativeApp = true;
     window.hasNativeBluetooth = true;
     window.appVersion = '${Constants.expoConfig?.version}';
+    console.log('[native-inject] flags applied', {
+      isNativeApp: window.isNativeApp,
+      hasNativeBluetooth: window.hasNativeBluetooth,
+      appVersion: window.appVersion
+    });
     true;
   `;
+
+  const shouldShowDebugPrinterTrigger =
+    __DEV__ && typeof currentUrl === 'string' && currentUrl.includes('/admin');
 
   return (
     <View style={styles.container}>
@@ -725,7 +760,7 @@ function App() {
         style={styles.webview}
       />
       
-      {__DEV__ && (
+      {shouldShowDebugPrinterTrigger && (
         <View style={{ position: 'absolute', top: 50, right: 10, zIndex: 9999 }}>
           <TouchableOpacity
             onPress={() => {
@@ -759,7 +794,9 @@ function App() {
   );
 }
 
-export default Sentry.wrap(App);
+const WrappedApp = HAS_SENTRY_DSN ? Sentry.wrap(App) : App;
+
+export default WrappedApp;
 
 const styles = StyleSheet.create({
   container: { flex: 1 },

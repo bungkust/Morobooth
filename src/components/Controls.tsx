@@ -7,6 +7,7 @@ interface ControlsProps {
   onRetake: () => void;
   onDownload: () => void;
   onPrint: () => void;
+  isNativeApp?: boolean;
 }
 
 export const Controls: React.FC<ControlsProps> = ({
@@ -14,7 +15,8 @@ export const Controls: React.FC<ControlsProps> = ({
   onStart,
   onRetake,
   onDownload,
-  onPrint
+  onPrint,
+  isNativeApp = false
 }) => {
   if (state === 'PREVIEW') {
     return (
@@ -33,15 +35,23 @@ export const Controls: React.FC<ControlsProps> = ({
           <button className="retake-button" onClick={onRetake}>
             RETAKE
           </button>
-          <button className="download-button" onClick={onDownload}>
-            DOWNLOAD
-          </button>
+          {isNativeApp ? (
+            <button className="print-button" onClick={onPrint}>
+              PRINT
+            </button>
+          ) : (
+            <button className="download-button" onClick={onDownload}>
+              DOWNLOAD
+            </button>
+          )}
         </div>
-        <div className="button-row">
-          <button className="print-button" onClick={onPrint}>
-            PRINT
-          </button>
-        </div>
+        {!isNativeApp && (
+          <div className="button-row">
+            <button className="print-button" onClick={onPrint}>
+              PRINT
+            </button>
+          </div>
+        )}
       </div>
     );
   }

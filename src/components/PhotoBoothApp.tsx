@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { PhotoBooth, type PhotoBoothRef, type AppState } from './PhotoBooth';
 import { Controls } from './Controls';
 import { PreviewModal } from './PreviewModal';
@@ -26,7 +26,27 @@ interface PhotoBoothAppProps {
 export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackToTemplate }) => {
   const photoBoothRef = useRef<PhotoBoothRef>(null);
   const { requestWakeLock, releaseWakeLock } = useWakeLock();
-  
+  const detectNativeEnvironment = useCallback(() => {
+    const fromBridge = nativeBridge.isNativeApp();
+    const hasRNWebView = typeof window !== 'undefined' && Boolean((window as any).ReactNativeWebView);
+    const uaHint =
+      typeof navigator !== 'undefined' && /morobooth(app)?/i.test((navigator as Navigator).userAgent ?? '');
+    const detected = fromBridge || hasRNWebView || uaHint;
+
+    if (typeof window !== 'undefined') {
+      console.log('[env-detect]', {
+        fromBridge,
+        hasRNWebView,
+        uaHint,
+        detected,
+        location: window.location.href
+      });
+    }
+
+    return detected;
+  }, []);
+
+  const [isNativeApp, setIsNativeApp] = useState<boolean>(false);
   const [appState, setAppState] = useState<AppState>('PREVIEW');
   const [countdownText, setCountdownText] = useState('');
   const [, setFrames] = useState<any[]>([]);
@@ -67,11 +87,25 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     return dataURL;
   };
   
-  const [printProgress, setPrintProgress] = useState<{status: string, progress: number} | null>(null);
-
   // Initialize native bridge and printer instance
   useEffect(() => {
     nativeBridge.init();
+
+    const initialDetection = detectNativeEnvironment();
+    setIsNativeApp(initialDetection);
+
+    const confirmationTimer = window.setInterval(() => {
+      const detected = detectNativeEnvironment();
+      if (detected) {
+        setIsNativeApp(true);
+        window.clearInterval(confirmationTimer);
+        window.clearTimeout(confirmationTimeout);
+      }
+    }, 500);
+
+    const confirmationTimeout = window.setTimeout(() => {
+      window.clearInterval(confirmationTimer);
+    }, 5000);
     
     // Get singleton printer instance
     const printerInstance = getHybridBluetoothPrinterService();
@@ -92,12 +126,6 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       }
     }
     
-    // Listen for print progress
-    const progressHandler = (event: any) => {
-      setPrintProgress(event.detail);
-    };
-    window.addEventListener('printProgress', progressHandler);
-    
     // Listen for Bluetooth status changes
     const statusHandler = (event: any) => {
       console.log('PhotoBoothApp: Received bluetoothStatusChange event:', event.detail);
@@ -111,7 +139,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     window.addEventListener('bluetoothStatusChange', statusHandler);
     
     return () => {
-      window.removeEventListener('printProgress', progressHandler);
+      window.clearInterval(confirmationTimer);
+      window.clearTimeout(confirmationTimeout);
       window.removeEventListener('bluetoothStatusChange', statusHandler);
     };
   }, []);
@@ -290,14 +319,6 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         </p>
       </div>
 
-      {/* Print progress indicator */}
-      {printProgress && (
-        <div className="print-progress">
-          <div className="progress-bar" style={{ width: `${printProgress.progress}%` }} />
-          <span>{printProgress.status}...</span>
-          </div>
-        )}
-      
       <div onClick={handleCanvasClick}>
         <PhotoBooth
           ref={photoBoothRef}
@@ -320,6 +341,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           onRetake={handleRetake}
           onDownload={handleDownload}
           onPrint={handlePrint}
+          isNativeApp={isNativeApp}
         />
       </div>
       
