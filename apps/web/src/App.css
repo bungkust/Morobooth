@@ -1532,15 +1532,94 @@ button:disabled {
 
 /* Config Card */
 .config-preview {
-  margin-bottom: 20px;
-  padding: 16px;
-  background: var(--c-white);
-  border: 2px solid var(--c-black);
-  box-shadow: 2px 2px 0 0 var(--c-black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 180px;
 }
 
-.preview-text {
+.preview-image {
+  max-width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border: 2px solid var(--c-black);
+  box-shadow: 2px 2px 0 0 var(--c-black);
+  background: var(--c-white);
+  padding: 8px;
+}
+
+.image-placeholder {
+  font-family: var(--font-main);
+  color: #999;
+  font-size: 14px;
+  border: 2px dashed #ccc;
+  padding: 24px;
+  width: 100%;
   text-align: center;
+}
+
+.display-mode {
+  display: flex;
+  gap: 8px;
+}
+
+.mode-btn {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: var(--font-main);
+  border: 2px solid var(--c-black);
+  background: var(--c-white);
+  color: var(--c-black);
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s ease-in-out;
+}
+
+.mode-btn.active {
+  background: var(--c-black);
+  color: var(--c-white);
+}
+
+.image-config {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.file-input-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.file-upload-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-family: var(--font-main);
+  border: 2px solid var(--c-black);
+  background: var(--c-white);
+  color: var(--c-black);
+  cursor: pointer;
+  box-shadow: 3px 3px 0 0 var(--c-black);
+  overflow: hidden;
+}
+
+.file-upload-btn input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.file-upload-btn.disabled {
+  pointer-events: none;
+  opacity: 0.5;
 }
 
 .main-text {
@@ -2201,4 +2280,17 @@ button:disabled {
   .nav-btn.active {
     font-size: 14px;
   }
+}
+
+.field-label {
+  font-size: 12px;
+  font-family: var(--font-main);
+  font-weight: 600;
+  color: #555;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.body-preview {
+  margin-top: 12px;
 }

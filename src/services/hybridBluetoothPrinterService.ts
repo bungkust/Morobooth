@@ -244,12 +244,12 @@ export class HybridBluetoothPrinterService {
     // Build the binary string in manageable chunks, then encode once.
     const chunkSize = 0x8000; // 32k - safe for String.fromCharCode spreads
     const segments: string[] = [];
-
+    
     for (let i = 0; i < arr.length; i += chunkSize) {
       const chunk = arr.subarray(i, i + chunkSize);
       segments.push(String.fromCharCode(...chunk));
     }
-
+    
     return btoa(segments.join(''));
   }
 

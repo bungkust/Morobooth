@@ -503,7 +503,7 @@ function App() {
             )
           );
           break;
-
+          
         default:
           console.log('Unknown message:', message.type);
       }

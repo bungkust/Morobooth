@@ -59,12 +59,15 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
 
   // Helper: compose final image (with QR if available) and return dataURL
-  const composeImageForPrint = async (): Promise<string | null> => {
+  const composeImageForPrint = async (photoId?: string): Promise<string | null> => {
     if (!photoBoothRef.current) return null;
     let dataURL: string | null = null;
-    const photoId = photoBoothRef.current.getPhotoIdForPrint();
-    if (photoId) {
-      const downloadURL = getDownloadURL(photoId);
+    
+    // Use provided photoId or get from ref
+    const currentPhotoId = photoId || photoBoothRef.current.getPhotoIdForPrint();
+    
+    if (currentPhotoId) {
+      const downloadURL = getDownloadURL(currentPhotoId);
       const qrCodeDataURL = await generateQRCodeDataURL(downloadURL);
       if (qrCodeDataURL) {
         const { composeResult } = await import('../utils/photoComposer');
@@ -86,7 +89,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     }
     return dataURL;
   };
-  
+
   // Initialize native bridge and printer instance
   useEffect(() => {
     nativeBridge.init();
@@ -238,14 +241,6 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         return;
       }
 
-      const dataURL = await composeImageForPrint();
-
-      if (!dataURL) {
-        console.error('Final composite not found for printing');
-        alert('Gagal: Foto tidak ditemukan');
-        return;
-      }
-
       // Check if printer is connected
       console.log('Print check - bluetoothPrinter:', !!bluetoothPrinter);
       console.log('Print check - isBluetoothConnected:', isBluetoothConnected);
@@ -253,11 +248,64 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         alert('Silahkan connect printer di halaman admin terlebih dahulu');
         return;
       }
+
+      // Check if photo has already been saved (to avoid duplicates)
+      let photoId = photoBoothRef.current.getPhotoIdForPrint();
       
-      // Print via Bluetooth
+      // If photo hasn't been saved yet, save it now
+      if (!photoId) {
+        // Get high-res composite dataURL for saving
+        const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
+        if (!highResDataURL) {
+          console.error('Final composite not found for saving');
+          alert('Gagal: Foto tidak ditemukan');
+          return;
+        }
+
+        // Save photo to IndexedDB (becomes pending for upload)
+        console.log('Saving photo locally before print...');
+        const { savePhotoLocally } = await import('../services/photoStorageService');
+        let photoRecord;
+        try {
+          photoRecord = await savePhotoLocally(highResDataURL);
+          photoId = photoRecord.id;
+          console.log('Photo saved locally:', photoId);
+          
+          // Update photoId in PhotoBooth ref so it's available for next print
+          if (photoBoothRef.current.setPhotoIdForPrint) {
+            photoBoothRef.current.setPhotoIdForPrint(photoId);
+          }
+        } catch (saveError) {
+          console.error('Failed to save photo locally:', saveError);
+          alert('Gagal menyimpan foto. Silakan coba lagi.');
+          return;
+        }
+      } else {
+        console.log('Photo already saved with ID:', photoId, '- Reusing existing photo');
+      }
+
+      // Compose image for print (with QR code using photoId)
+      console.log('Composing image for print with QR code...');
+      const dataURL = await composeImageForPrint(photoId);
+
+      if (!dataURL) {
+        // Fallback to high-res dataURL if composeImageForPrint fails
+        console.warn('composeImageForPrint returned null, using high-res dataURL');
+      }
+      
+      // Get high-res dataURL as fallback if composeImageForPrint fails
+      const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
+      
+      // Print via Bluetooth (use composed image with QR code or fallback to high-res)
       console.log('Starting Bluetooth print...');
-      await bluetoothPrinter.printImage(dataURL);
+      const printDataURL = dataURL || highResDataURL;
+      if (!printDataURL) {
+        alert('Gagal: Foto tidak ditemukan untuk print');
+        return;
+      }
+      await bluetoothPrinter.printImage(printDataURL);
       console.log('Print command sent');
+      console.log('Photo ID:', photoId, '- Status: PENDING UPLOAD');
       // Note: Actual print result will come via PRINT_SUCCESS event
       
     } catch (error) {
@@ -318,7 +366,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           AUTOMATICALLY! READY TO PRINT!
         </p>
       </div>
-
+      
       <div onClick={handleCanvasClick}>
         <PhotoBooth
           ref={photoBoothRef}

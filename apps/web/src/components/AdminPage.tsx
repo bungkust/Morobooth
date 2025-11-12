@@ -13,14 +13,17 @@ import { isSupabaseConfigured } from '../config/supabase';
 import { 
   getConfigOverride, 
   setConfigOverride, 
-  clearConfigOverride, 
-  clearConfigCache,
-  type ConfigOverride 
+  type ConfigOverride,
+  type ConfigHeader,
+  type ConfigBody
 } from '../services/configService';
 import { HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
+import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
 
 export const AdminPage = () => {
+  const DEFAULT_BODY_MAIN = 'Morobooth';
+  const DEFAULT_BODY_SUB = '2025';
   
   const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
@@ -37,10 +40,44 @@ export const AdminPage = () => {
   // Config states
   const [configOverride, setConfigOverrideState] = useState<ConfigOverride>({
     enabled: false,
+    header: {
+      mode: 'text',
     mainText: '',
-    subText: ''
+      subText: '',
+      imageUrl: ''
+    },
+    body: {
+      mainText: DEFAULT_BODY_MAIN,
+      subText: DEFAULT_BODY_SUB
+    }
   });
   const [configError, setConfigError] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadImageError, setUploadImageError] = useState('');
+
+  type ConfigHeaderPatch = Partial<ConfigHeader>;
+  type ConfigBodyPatch = Partial<ConfigBody>;
+  type ConfigOverridePatch = Omit<Partial<ConfigOverride>, 'header' | 'body'> & { header?: ConfigHeaderPatch; body?: ConfigBodyPatch };
+
+  const updateConfigOverride = useCallback((patch: ConfigOverridePatch) => {
+    setConfigOverrideState((prev) => {
+      const { header: headerPatch, body: bodyPatch, ...rest } = patch;
+      const nextHeader: ConfigHeader = {
+        ...prev.header,
+        ...(headerPatch ?? {})
+      };
+      const nextBody: ConfigBody = {
+        ...prev.body,
+        ...(bodyPatch ?? {})
+      };
+      return {
+        ...prev,
+        ...rest,
+        header: nextHeader,
+        body: nextBody
+      };
+    });
+  }, []);
 
   // Tab state
   const [activeTab, setActiveTab] = useState<'session' | 'upload' | 'config' | 'history' | 'bluetooth'>('session');
@@ -59,7 +96,6 @@ export const AdminPage = () => {
       const all = await getAllSessions();
       setSessions(all);
       
-      // Only try to get unuploaded photos if we have a session
       if (current) {
         try {
           const unuploaded = await getUnuploadedPhotos();
@@ -72,9 +108,8 @@ export const AdminPage = () => {
         setUnuploadedPhotos([]);
       }
 
-      // Load config override
-      const config = getConfigOverride();
-      setConfigOverrideState(config);
+      const localConfig = getConfigOverride();
+      setConfigOverrideState(localConfig);
     } catch (error) {
       console.error('Error loading data:', error);
       setError('Failed to load data. Please refresh the page.');
@@ -165,10 +200,67 @@ export const AdminPage = () => {
   }
 
   // Config handlers
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setUploadImageError('Please select an image file');
+      return;
+    }
+    
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadImageError('Image too large (max 10MB)');
+      return;
+    }
+    
+    setUploadingImage(true);
+    setUploadImageError('');
+    
+    try {
+      const result = await uploadHeaderImage(file, currentSession?.sessionCode);
+      
+      if (result.success && result.url) {
+        updateConfigOverride({
+          enabled: true,
+          header: { mode: 'image', imageUrl: result.url }
+        });
+        setUploadImageError('');
+      } else {
+        setUploadImageError(result.error || 'Failed to upload image');
+      }
+    } catch (error) {
+      console.error('Image upload error:', error);
+      setUploadImageError(error instanceof Error ? error.message : 'Unknown error');
+    } finally {
+      setUploadingImage(false);
+      // Reset file input
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    const imageUrl = configOverride.header.imageUrl;
+    if (!imageUrl) return;
+    
+    // Only delete from Supabase if it's a Supabase URL
+    if (imageUrl.includes('supabase.co')) {
+      await deleteHeaderImage(imageUrl);
+    }
+    
+    updateConfigOverride({ header: { imageUrl: '' } });
+    setUploadImageError('');
+  };
+
   function handleConfigSave() {
     try {
+      if (configOverride.enabled && configOverride.header.mode === 'image' && !configOverride.header.imageUrl) {
+        setConfigError('Please provide an image URL or upload an image before saving.');
+        return;
+      }
       setConfigOverride(configOverride);
-      clearConfigCache();
       setConfigError('');
       alert('Configuration saved successfully!');
     } catch (err) {
@@ -179,12 +271,21 @@ export const AdminPage = () => {
   function handleConfigClear() {
     if (confirm('Clear custom configuration? This will revert to default values.')) {
       try {
-        clearConfigOverride();
-        setConfigOverrideState({
+        const clearedConfig: ConfigOverride = {
           enabled: false,
+          header: {
+            mode: 'text',
           mainText: '',
-          subText: ''
-        });
+            subText: '',
+            imageUrl: ''
+          },
+          body: {
+            mainText: DEFAULT_BODY_MAIN,
+            subText: DEFAULT_BODY_SUB
+          }
+        };
+        setConfigOverride(clearedConfig);
+        setConfigOverrideState(clearedConfig);
         setConfigError('');
         alert('Configuration cleared!');
       } catch (err) {
@@ -439,37 +540,146 @@ export const AdminPage = () => {
                 {configError && <div className="error-message">{configError}</div>}
                 
                 <div className="config-preview">
+                  {configOverride.enabled ? (
+                    configOverride.header.mode === 'image' ? (
+                      configOverride.header.imageUrl ? (
+                        <img
+                          src={configOverride.header.imageUrl}
+                          alt="Custom logo"
+                          className="preview-image"
+                        />
+                      ) : (
+                        <div className="image-placeholder">No image selected</div>
+                      )
+                    ) : (
+                      <div className="preview-text">
+                        {configOverride.header.mainText?.trim() ? (
+                          <div className="main-text">{configOverride.header.mainText.trim()}</div>
+                        ) : null}
+                        {configOverride.header.subText?.trim() ? (
+                          <div className="sub-text">{configOverride.header.subText.trim()}</div>
+                        ) : null}
+                      </div>
+                    )
+                  ) : (
                   <div className="preview-text">
-                    <div className="main-text">{configOverride.enabled ? (configOverride.mainText || 'Morobooth') : 'Morobooth (default)'}</div>
-                    <div className="sub-text">{configOverride.enabled ? (configOverride.subText || '2025') : '2025 (default)'}</div>
+                      <div className="main-text">Morobooth (default)</div>
+                      <div className="sub-text">2025 (default)</div>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const bodyMain = configOverride.enabled ? configOverride.body.mainText?.trim() ?? '' : DEFAULT_BODY_MAIN;
+                    const bodySub = configOverride.enabled ? configOverride.body.subText?.trim() ?? '' : DEFAULT_BODY_SUB;
+                    const showMain = configOverride.enabled ? bodyMain.length > 0 : true;
+                    const showSub = configOverride.enabled ? bodySub.length > 0 : true;
+                    if (!showMain && !showSub) return null;
+                    return (
+                      <div className="preview-text body-preview">
+                        {showMain && <div className="main-text">{bodyMain}</div>}
+                        {showSub && <div className="sub-text">{bodySub}</div>}
                   </div>
+                    );
+                  })()}
                 </div>
 
                 <div className="config-form">
+                  <div className="display-mode">
+                    <button
+                      type="button"
+                      className={`mode-btn ${configOverride.header.mode === 'text' ? 'active' : ''}`}
+                      onClick={() => updateConfigOverride({ header: { mode: 'text', imageUrl: '' } })}
+                    >
+                      Text Mode
+                    </button>
+                    <button
+                      type="button"
+                      className={`mode-btn ${configOverride.header.mode === 'image' ? 'active' : ''}`}
+                      onClick={() => updateConfigOverride({ enabled: true, header: { mode: 'image' } })}
+                    >
+                      Image Mode
+                    </button>
+                  </div>
+
+                  {configOverride.header.mode === 'text' && (
+                    <>
+                      <label className="field-label">Header Main Text</label>
                   <input
                     type="text"
                     placeholder="Main Text (e.g., Kus & Lira)"
-                    value={configOverride.mainText}
-                    onChange={(e) => setConfigOverrideState({
-                      ...configOverride,
-                      mainText: e.target.value
-                    })}
+                        value={configOverride.header.mainText}
+                        onChange={(e) => updateConfigOverride({ header: { mainText: e.target.value } })}
                   />
+                      <label className="field-label">Header Sub Text</label>
                   <input
                     type="text"
                     placeholder="Sub Text (e.g., #Bahagia Selamanya)"
-                    value={configOverride.subText}
-                    onChange={(e) => setConfigOverrideState({
-                      ...configOverride,
-                      subText: e.target.value
-                    })}
+                        value={configOverride.header.subText}
+                        onChange={(e) => updateConfigOverride({ header: { subText: e.target.value } })}
+                      />
+                      <label className="field-label">Main Text (Body)</label>
+                      <input
+                        type="text"
+                        placeholder="Main Text (e.g., Morobooth)"
+                        value={configOverride.body.mainText}
+                        onChange={(e) => updateConfigOverride({ body: { mainText: e.target.value } })}
+                      />
+                      <label className="field-label">Sub Text (Body)</label>
+                      <input
+                        type="text"
+                        placeholder="Sub Text (e.g., 2025)"
+                        value={configOverride.body.subText}
+                        onChange={(e) => updateConfigOverride({ body: { subText: e.target.value } })}
+                      />
+                    </>
+                  )}
+ 
+                  {configOverride.header.mode === 'image' && (
+                    <div className="image-config">
+                      <input
+                        type="text"
+                        placeholder="Image URL (https://...) or upload below"
+                        value={configOverride.header.imageUrl}
+                        onChange={(e) => updateConfigOverride({ header: { imageUrl: e.target.value } })}
+                        disabled={uploadingImage}
                   />
+                      <div className="file-input-row">
+                        <label className={`file-upload-btn ${uploadingImage ? 'disabled' : ''}`}>
+                          {uploadingImage ? 'Uploading...' : 'Upload Image (WebP)'}
+                          <input
+                            type="file"
+                            accept="image/png, image/jpeg, image/jpg, image/webp, image/*"
+                            disabled={uploadingImage}
+                            onChange={handleImageUpload}
+                          />
+                        </label>
+                        {configOverride.header.imageUrl && (
+                          <button
+                            type="button"
+                            className="secondary-btn"
+                            onClick={handleRemoveImage}
+                            disabled={uploadingImage}
+                          >
+                            Remove Image
+                          </button>
+                        )}
+                      </div>
+                      {uploadImageError && (
+                        <div className="error-message" style={{ marginTop: '8px' }}>
+                          {uploadImageError}
+                        </div>
+                      )}
+                      {uploadingImage && (
+                        <div className="upload-progress" style={{ marginTop: '8px', color: '#666' }}>
+                          Converting to WebP and uploading...
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="config-controls">
                     <button 
-                      onClick={() => setConfigOverrideState({
-                        ...configOverride,
-                        enabled: !configOverride.enabled
-                      })}
+                      onClick={() => updateConfigOverride({ enabled: !configOverride.enabled })}
                       className={configOverride.enabled ? 'danger-btn' : 'secondary-btn'}
                     >
                       {configOverride.enabled ? 'Disable' : 'Enable'} Custom Text

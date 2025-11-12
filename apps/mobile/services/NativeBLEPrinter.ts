@@ -290,11 +290,11 @@ export class NativeBLEPrinter {
       for (let i = 0; i < escposCommands.length; i += chunkSize) {
         const chunk = escposCommands.slice(i, i + chunkSize);
         const chunkArray = Array.from(chunk);
-
+        
         const writeMethod = this.characteristicProperties?.WriteWithoutResponse
           ? 'writeWithoutResponse'
           : 'write';
-
+        
         console.log('Native: sending chunk', {
           offset: i,
           chunkBytes: chunk.length,
@@ -313,9 +313,9 @@ export class NativeBLEPrinter {
             );
           } else {
             await BleManager.write(
-              this.connectedDeviceId,
-              this.serviceUUID,
-              this.characteristicUUID,
+          this.connectedDeviceId,
+          this.serviceUUID,
+          this.characteristicUUID,
               chunkArray
             );
           }
@@ -328,7 +328,7 @@ export class NativeBLEPrinter {
           });
           throw err;
         }
-
+        
         // Adaptive delay based on chunk size
         if (chunkSize < 100) {
           await new Promise(r => setTimeout(r, 50));

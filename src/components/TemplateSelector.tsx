@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 interface Template {
   id: string;
@@ -15,6 +15,7 @@ interface Template {
 
 interface TemplateSelectorProps {
   onTemplateSelected: (template: Template) => void;
+  onBack?: () => void;
 }
 
 const templates: Template[] = [
@@ -60,8 +61,10 @@ const templates: Template[] = [
   }
 ];
 
-export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSelected }) => {
+export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSelected, onBack }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [, setAdminTapCount] = useState<number>(0);
+  const adminTapTimeoutRef = useRef<number | null>(null);
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplateId(templateId);
@@ -73,6 +76,37 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
       onTemplateSelected(template);
     }
   };
+
+  const handleAdminSecretTap = () => {
+    setAdminTapCount((prev) => {
+      const next = prev + 1;
+      if (adminTapTimeoutRef.current) {
+        window.clearTimeout(adminTapTimeoutRef.current);
+        adminTapTimeoutRef.current = null;
+      }
+
+      if (next >= 4) {
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 0);
+        return 0;
+      }
+
+      adminTapTimeoutRef.current = window.setTimeout(() => {
+        setAdminTapCount(0);
+        adminTapTimeoutRef.current = null;
+      }, 1500);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (adminTapTimeoutRef.current) {
+        window.clearTimeout(adminTapTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
 
@@ -134,6 +168,18 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
           {selectedTemplate ? `Continue with ${selectedTemplate.name}` : 'Select a Template'}
         </button>
       </div>
+      {onBack && (
+        <div className="template-footer">
+          <div className="footer-buttons">
+            <button className="back-btn" onClick={onBack}>
+              ← Back
+            </button>
+            <button className="admin-secret-btn" onClick={handleAdminSecretTap}>
+              Admin Panel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

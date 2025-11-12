@@ -3,7 +3,6 @@ import { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import Sketch from 'react-p5';
 import { orderedDither } from '../utils/dithering';
 import { useAudio } from '../hooks/useAudio';
-import { savePhotoLocally } from '../services/photoStorageService';
 export type AppState = 'PREVIEW' | 'COUNTDOWN' | 'CAPTURING' | 'REVIEW' | 'COMPOSING';
 
 interface Template {
@@ -35,6 +34,7 @@ export interface PhotoBoothRef {
   downloadComposite: () => void;
   getFinalCompositeDataURL: () => string | null;
   getPhotoIdForPrint: () => string | null;
+  setPhotoIdForPrint: (photoId: string | null) => void;
   getP5Instance: () => p5 | null;
   getFrames: () => p5.Image[];
 }
@@ -401,16 +401,9 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
         finalCompositeHighResRef.current = compositeHighRes;
         console.log('High-res composite complete');
 
-        // NEW: Save photo to IndexedDB
-        try {
-          console.log('Saving photo locally...');
-          const dataURL = (compositeHighRes as any).canvas.toDataURL('image/png');
-          const photoRecord = await savePhotoLocally(dataURL);
-          currentPhotoIdRef.current = photoRecord.id;
-          console.log('Photo saved locally:', photoRecord.id);
-        } catch (err) {
-          console.error('Failed to save photo locally:', err);
-        }
+        // Note: Photo will be saved when user clicks print button
+        // Reset photoId ref (will be set when saved)
+        currentPhotoIdRef.current = null;
 
         // Switch to REVIEW state
         console.log('Switching to REVIEW state...');
@@ -527,6 +520,9 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       return null;
     },
     getPhotoIdForPrint: () => currentPhotoIdRef.current,
+    setPhotoIdForPrint: (photoId: string | null) => {
+      currentPhotoIdRef.current = photoId;
+    },
     getP5Instance: () => p5InstanceRef.current,
     getFrames: () => framesRef.current
   }));

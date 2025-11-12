@@ -95,6 +95,17 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
   return out;
 }
 
+async function loadImageSafe(p: any, src: string): Promise<any | null> {
+  return new Promise((resolve) => {
+    try {
+      p.loadImage(src, (img: any) => resolve(img), () => resolve(null));
+    } catch (error) {
+      console.error('loadImageSafe error:', error);
+      resolve(null);
+    }
+  });
+}
+
 /**
  * Compose photos into a single strip with high-quality dithering based on template
  */
@@ -106,13 +117,29 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   const config = await loadConfig();
   console.log('Config loaded:', config);
   
+  const useImageHeader = !!(config.header.mode === 'image' && config.header.imageUrl);
+  let headerImage: any | null = null;
+  let headerImageDrawHeight = 0;
+  if (useImageHeader) {
+    headerImage = await loadImageSafe(p, config.header.imageUrl);
+    if (!headerImage) {
+      console.warn('Failed to load header image, falling back to text');
+    }
+  }
+  const hasHeaderText = config.header.mode === 'text' && !!((config.header.mainText && config.header.mainText.trim()) || (config.header.subText && config.header.subText.trim()));
+  const bodyHasText = !!((config.body.mainText && config.body.mainText.trim()) || (config.body.subText && config.body.subText.trim()));
+  const imageHeaderHeight = headerImage ? 180 : 0;
+  const headerTextHeight = hasHeaderText ? 120 : 0;
+  const bodyTextHeight = bodyHasText ? 120 : 0;
+  const headerGap = headerImage && (hasHeaderText || bodyHasText) ? 20 : 0;
+  const headerH = imageHeaderHeight + headerGap + headerTextHeight + bodyTextHeight;
+  
   // Use template dimensions for flexible sizing
   const W = template.width * 16; // Convert mm to pixels (58mm * 16 = 928px)
   const margin = 24;
   const gap = 16;
   const cellW = W - margin * 2;
   const cellH = cellW; // Rasio 1:1
-  const headerH = (config.mainText && config.mainText.trim()) || (config.subText && config.subText.trim()) ? 120 : 0; // Space for custom text
   
   // Calculate QR code space
   const qrSize = qrCodeDataURL ? 120 : 0;
@@ -164,24 +191,60 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   const out = p.createGraphics(W, H);
   out.background(255); // Latar putih
   
+  // Render custom header image if provided
+  if (headerImage) {
+    const availableWidth = W - margin * 2;
+    let drawWidth = availableWidth;
+    let drawHeight = imageHeaderHeight;
+    const aspectRatio = headerImage.width / headerImage.height || 1;
+    if (drawWidth / drawHeight > aspectRatio) {
+      drawWidth = drawHeight * aspectRatio;
+    } else {
+      drawHeight = drawWidth / aspectRatio;
+    }
+    const imageX = (W - drawWidth) / 2;
+    out.image(headerImage, imageX, margin, drawWidth, drawHeight);
+    headerImageDrawHeight = drawHeight;
+  }
+  
   // Render custom text header if provided
-  if ((config.mainText && config.mainText.trim()) || (config.subText && config.subText.trim())) {
+  let textCursor = margin + headerImageDrawHeight + (headerImageDrawHeight ? headerGap : 0);
+  if (hasHeaderText) {
     out.fill(0);
     out.noStroke();
     out.textAlign(p.CENTER, p.CENTER);
     out.textFont('monospace');
+    const headerY = textCursor + headerTextHeight / 2;
     
-    const headerY = margin + (headerH / 2);
-    
-    if (config.mainText && config.mainText.trim()) {
+    if (config.header.mainText && config.header.mainText.trim()) {
       out.textSize(48);
-      out.text(config.mainText.trim(), W / 2, headerY - 15);
+      out.text(config.header.mainText.trim(), W / 2, headerY - 15);
     }
     
-    if (config.subText && config.subText.trim()) {
+    if (config.header.subText && config.header.subText.trim()) {
       out.textSize(32);
-      out.text(config.subText.trim(), W / 2, headerY + 25);
+      out.text(config.header.subText.trim(), W / 2, headerY + 25);
     }
+    textCursor += headerTextHeight;
+  }
+  
+  if (bodyHasText) {
+    out.fill(0);
+    out.noStroke();
+    out.textAlign(p.CENTER, p.CENTER);
+    out.textFont('monospace');
+    const bodyCenter = textCursor + bodyTextHeight / 2;
+    
+    if (config.body.mainText && config.body.mainText.trim()) {
+      out.textSize(42);
+      out.text(config.body.mainText.trim(), W / 2, bodyCenter - 15);
+    }
+    
+    if (config.body.subText && config.body.subText.trim()) {
+      out.textSize(30);
+      out.text(config.body.subText.trim(), W / 2, bodyCenter + 20);
+    }
+    textCursor += bodyTextHeight;
   }
   
   // Render date below header (above photos)

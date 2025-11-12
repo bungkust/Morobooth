@@ -40,9 +40,9 @@ export const Controls: React.FC<ControlsProps> = ({
               PRINT
             </button>
           ) : (
-            <button className="download-button" onClick={onDownload}>
-              DOWNLOAD
-            </button>
+          <button className="download-button" onClick={onDownload}>
+            DOWNLOAD
+          </button>
           )}
         </div>
       </div>

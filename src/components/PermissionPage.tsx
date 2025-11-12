@@ -3,9 +3,14 @@ import React, { useState, useEffect } from 'react';
 interface PermissionPageProps {
   onPermissionGranted: () => void;
   isAdminPage?: boolean; // Add this prop
+  autoProceedIfGranted?: boolean;
 }
 
-export const PermissionPage: React.FC<PermissionPageProps> = ({ onPermissionGranted, isAdminPage = false }) => {
+export const PermissionPage: React.FC<PermissionPageProps> = ({
+  onPermissionGranted,
+  isAdminPage = false,
+  autoProceedIfGranted = true
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
@@ -20,7 +25,7 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({ onPermissionGran
       // Check if camera permission is already granted
       const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
       
-      if (result.state === 'granted' && !isAdminPage) {
+      if (result.state === 'granted' && !isAdminPage && autoProceedIfGranted) {
         // Permission already granted, proceed to photo booth (but not if we're on admin page)
         onPermissionGranted();
         return;

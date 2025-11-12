@@ -23,6 +23,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState<AppPage>('permission');
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [photoIdToDownload, setPhotoIdToDownload] = useState<string>('');
+  const [permissionAutoProceed, setPermissionAutoProceed] = useState(true);
 
   // Add route detection in useEffect
   useEffect(() => {
@@ -70,6 +71,7 @@ function App() {
       return;
     }
     setCurrentPage('template');
+    setPermissionAutoProceed(true);
   };
 
   const handleTemplateSelected = (template: Template) => {
@@ -77,6 +79,11 @@ function App() {
     setCurrentPage('photobooth');
   };
 
+  const handleBackToPermission = () => {
+    setSelectedTemplate(null);
+    setPermissionAutoProceed(false);
+    setCurrentPage('permission');
+  };
   const handleBackToTemplate = () => {
     setCurrentPage('template');
   };
@@ -84,10 +91,16 @@ function App() {
   return (
     <div id="app-container">
       {currentPage === 'permission' && (
-        <PermissionPage onPermissionGranted={handlePermissionGranted} />
+        <PermissionPage
+          onPermissionGranted={handlePermissionGranted}
+          autoProceedIfGranted={permissionAutoProceed}
+        />
       )}
       {currentPage === 'template' && (
-        <TemplateSelector onTemplateSelected={handleTemplateSelected} />
+        <TemplateSelector
+          onTemplateSelected={handleTemplateSelected}
+          onBack={handleBackToPermission}
+        />
       )}
       {currentPage === 'photobooth' && selectedTemplate && (
         <PhotoBoothApp template={selectedTemplate} onBackToTemplate={handleBackToTemplate} />
