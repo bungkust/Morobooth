@@ -252,7 +252,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       console.log('Print check - bluetoothPrinter:', !!bluetoothPrinter);
       console.log('Print check - isBluetoothConnected:', isBluetoothConnected);
       if (!bluetoothPrinter || !isBluetoothConnected) {
-        showNotification('Silakan connect printer di halaman admin terlebih dahulu', 'error');
+        showNotification('Please connect printer in admin page first', 'error');
         return;
       }
 
@@ -265,7 +265,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
         if (!highResDataURL) {
           console.error('Final composite not found for saving');
-          showNotification('Gagal: Foto tidak ditemukan', 'error');
+          showNotification('Failed: Photo not found', 'error');
           return;
         }
 
@@ -284,7 +284,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           }
         } catch (saveError) {
           console.error('Failed to save photo locally:', saveError);
-          showNotification('Gagal menyimpan foto. Silakan coba lagi.', 'error');
+          showNotification('Failed to save photo. Please try again.', 'error');
           return;
         }
       } else {
@@ -307,7 +307,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       console.log('Starting Bluetooth print...');
       const printDataURL = dataURL || highResDataURL;
       if (!printDataURL) {
-        showNotification('Gagal: Foto tidak ditemukan untuk print', 'error');
+        showNotification('Failed: Photo not found for print', 'error');
         return;
       }
       await bluetoothPrinter.printImage(printDataURL);
@@ -317,7 +317,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       
     } catch (error) {
       console.error('Print failed:', error);
-      showNotification('Gagal mencetak. Silakan coba lagi.', 'error');
+      showNotification('Failed to print. Please try again.', 'error');
     }
   };
 

@@ -166,7 +166,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({
     <div className="modal-overlay-fullscreen" onClick={onClose}>
       <div className="modal-content-fullscreen" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header-fullscreen">
-          <h3>Preview untuk Print & Download</h3>
+          <h3>Preview for Print & Download</h3>
           <button className="modal-close" onClick={onClose}>
             ×
           </button>
@@ -189,7 +189,7 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({
             <img 
               ref={imageRef}
               src={imageDataURL} 
-              alt="Preview untuk print" 
+              alt="Preview for print" 
               className="preview-image-fullscreen"
               style={{
                 transform: `scale(${zoom}) translate(${imagePosition.x / zoom}px, ${imagePosition.y / zoom}px)`,

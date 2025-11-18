@@ -362,7 +362,7 @@ export const AdminPage = () => {
         await clearAllData();
         setError('');
         await loadData();
-        showNotification('Semua data berhasil dihapus!', 'success');
+        showNotification('All data cleared successfully!', 'success');
       } catch (err) {
         console.error('Error clearing all data:', err);
         setError('Failed to clear all data');
@@ -373,7 +373,7 @@ export const AdminPage = () => {
   async function viewSessionPhotos(sessionCode: string) {
     const photos = await getPhotosBySession(sessionCode);
     const uploaded = photos.filter(p => p.uploaded).length;
-    showNotification(`Session ${sessionCode}: ${photos.length} foto total, ${uploaded} terupload, ${photos.length - uploaded} pending`, 'info');
+    showNotification(`Session ${sessionCode}: ${photos.length} total photos, ${uploaded} uploaded, ${photos.length - uploaded} pending`, 'info');
   }
 
   // Config handlers
@@ -434,7 +434,7 @@ export const AdminPage = () => {
   function handleConfigSave() {
     try {
       if (configOverride.enabled && configOverride.header.mode === 'image' && !configOverride.header.imageUrl) {
-        setConfigError('Please provide an image URL or upload an image before saving.');
+        setConfigError('Please upload an image before saving.');
         return;
       }
       const overrideToSave: ConfigOverride = {
@@ -446,7 +446,7 @@ export const AdminPage = () => {
         console.error('syncConfigToSupabase failed:', error);
       });
       setConfigError('');
-      showNotification('Konfigurasi berhasil disimpan!', 'success');
+      showNotification('Configuration saved successfully!', 'success');
     } catch (err) {
       setConfigError('Failed to save configuration');
     }
@@ -475,7 +475,7 @@ export const AdminPage = () => {
           console.error('syncConfigToSupabase (clear) failed:', error);
         });
         setConfigError('');
-        showNotification('Konfigurasi berhasil dihapus!', 'success');
+        showNotification('Configuration cleared successfully!', 'success');
       } catch (err) {
         setConfigError('Failed to clear configuration');
       }
@@ -534,7 +534,7 @@ export const AdminPage = () => {
       } else {
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
-          showNotification('Web Bluetooth tidak didukung di browser ini', 'error');
+          showNotification('Web Bluetooth is not supported in this browser', 'error');
           return;
         }
         
@@ -543,15 +543,31 @@ export const AdminPage = () => {
           setIsBluetoothConnected(true);
           const info = bluetoothPrinter.getPrinterInfo();
           setPrinterInfo(info);
-          showNotification(`Terhubung ke ${info?.name || 'Printer'}`, 'success');
+          showNotification(`Connected to ${info?.name || 'Printer'}`, 'success');
         } else {
           setBluetoothError('Failed to connect to printer');
         }
       }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Unknown error';
-      setBluetoothError(msg);
-      showNotification('Error koneksi Bluetooth: ' + msg, 'error');
+      let errorMessage = 'Bluetooth connection failed.';
+      
+      if (e instanceof Error) {
+        // Use the error message if it's user-friendly
+        if (e.message.includes('permission') || e.message.includes('denied')) {
+          errorMessage = e.message;
+        } else if (e.message.includes('not found') || e.message.includes('No Bluetooth')) {
+          errorMessage = e.message;
+        } else if (e.message.includes('NetworkError') || e.message.includes('Failed to connect')) {
+          errorMessage = e.message;
+        } else {
+          errorMessage = 'Bluetooth connection failed: ' + e.message;
+        }
+      } else {
+        errorMessage = 'Bluetooth connection failed. Please try again.';
+      }
+      
+      setBluetoothError(errorMessage);
+      showNotification(errorMessage, 'error');
     }
   };
 
@@ -568,7 +584,7 @@ export const AdminPage = () => {
 
   const handleTestPrint = async () => {
     if (!bluetoothPrinter || !isBluetoothConnected) {
-      showNotification('Printer tidak terhubung. Silakan connect printer terlebih dahulu.', 'error');
+      showNotification('Printer not connected. Please connect printer first.', 'error');
       return;
     }
 
@@ -581,15 +597,15 @@ export const AdminPage = () => {
       const success = await bluetoothPrinter.printStreetCoffeeReceipt(receiptWidth);
       
       if (success) {
-        showNotification('Test print berhasil dikirim! Cek printer Anda untuk struk Street Coffee.', 'success');
+        showNotification('Test print sent successfully! Check your printer for Street Coffee receipt.', 'success');
       } else {
-        throw new Error('Print gagal');
+        throw new Error('Print failed');
       }
     } catch (error) {
       console.error('Test print error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-      setBluetoothError('Test print gagal: ' + errorMsg);
-      showNotification('Test print gagal: ' + errorMsg, 'error');
+      setBluetoothError('Test print failed: ' + errorMsg);
+      showNotification('Test print failed: ' + errorMsg, 'error');
     } finally {
       setTestPrintLoading(false);
     }
@@ -629,7 +645,7 @@ export const AdminPage = () => {
                 className="ghost-back-btn"
                 onClick={() => (window.location.href = '/')}
               >
-                ← Back ke Booth
+                ← Back
               </button>
             </div>
           </div>
@@ -659,15 +675,11 @@ export const AdminPage = () => {
       )}
       <div className="admin-container">
         <div className="admin-header">
-          <h1>Admin Panel</h1>
-          {bundleVersion && (
-            <span className="bundle-version">
-              Bundle: {bundleVersion}
-            </span>
-          )}
-          <button onClick={() => window.location.href = '/'} className="back-btn">
-            ← Back to Booth
+          <button onClick={() => window.location.href = '/'} className="back-btn-small">
+            ←
           </button>
+          <h1>Admin Panel</h1>
+          <div style={{ width: '40px' }}></div>
         </div>
 
         <div className="admin-content">
@@ -675,42 +687,37 @@ export const AdminPage = () => {
           {activeTab === 'session' && (
             <div className="tab-content">
               {/* Current Session Card */}
-              <div className="admin-card current-session-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Current Session</h2>
-                  <div className="status-indicator active"></div>
                 </div>
-                     {currentSession ? (
-                       <div className="session-info">
-                         <div className="info-row">
-                           <span className="label">Status:</span>
-                           <span className="value status-active">🟢 ACTIVE SESSION</span>
-                         </div>
-                         <div className="info-row">
-                           <span className="label">Event:</span>
-                           <span className="value">{currentSession.eventName}</span>
-                         </div>
-                         <div className="info-row">
-                           <span className="label">Code:</span>
-                           <span className="value code">{currentSession.sessionCode}</span>
-                         </div>
-                         <div className="info-row">
-                           <span className="label">Photos:</span>
-                           <span className="value">{currentSession.photoCount}</span>
-                         </div>
-                         <div className="info-row">
-                           <span className="label">Created:</span>
-                           <span className="value">{new Date(currentSession.createdAt).toLocaleDateString()}</span>
-                         </div>
-                         <div className="session-actions">
-                           <button onClick={handleClearSession} className="danger-btn">
-                             Clear Session
-                           </button>
-                           <button onClick={handleClearAllData} className="danger-btn">
-                             Clear All Data
-                           </button>
-                         </div>
-                       </div>
+                {currentSession ? (
+                  <div className="session-info">
+                    <div className="info-row">
+                      <span className="label">Event:</span>
+                      <span className="value">{currentSession.eventName}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="label">Code:</span>
+                      <span className="value code">{currentSession.sessionCode}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="label">Photos:</span>
+                      <span className="value">{currentSession.photoCount}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="label">Created:</span>
+                      <span className="value">{new Date(currentSession.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    <div className="session-actions">
+                      <button onClick={handleClearSession} className="danger-btn">
+                        Clear Session
+                      </button>
+                      <button onClick={handleClearAllData} className="danger-btn">
+                        Clear All Data
+                      </button>
+                    </div>
+                  </div>
                 ) : (
                   <div className="no-session">
                     <p>No active session</p>
@@ -720,10 +727,9 @@ export const AdminPage = () => {
               </div>
 
               {/* Create Session Card */}
-              <div className="admin-card create-session-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Create New Session</h2>
-                  <div className="status-indicator"></div>
                 </div>
                 {error && error.includes('create') && <div className="error-message">{error}</div>}
                 <div className="create-form">
@@ -744,10 +750,9 @@ export const AdminPage = () => {
 
           {activeTab === 'upload' && (
             <div className="tab-content">
-              <div className="admin-card upload-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Upload Photos</h2>
-                  <div className={`status-indicator ${isSupabaseConfigured() ? 'success' : 'error'}`}></div>
                 </div>
                 {error && error.includes('Supabase') && <div className="error-message">{error}</div>}
                 
@@ -804,10 +809,9 @@ export const AdminPage = () => {
 
           {activeTab === 'config' && (
             <div className="tab-content">
-              <div className="admin-card config-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Custom Text</h2>
-                  <div className={`status-indicator ${configOverride.enabled ? 'active' : ''}`}></div>
                 </div>
                 {configError && <div className="error-message">{configError}</div>}
                 
@@ -908,13 +912,6 @@ export const AdminPage = () => {
  
                   {configOverride.header.mode === 'image' && (
                     <div className="image-config">
-                      <input
-                        type="text"
-                        placeholder="Image URL (https://...) or upload below"
-                        value={configOverride.header.imageUrl ?? ''}
-                        onChange={(e) => updateConfigOverride({ header: { imageUrl: e.target.value } })}
-                        disabled={uploadingImage}
-                      />
                       <div className="file-input-row">
                         <label className={`file-upload-btn ${uploadingImage ? 'disabled' : ''}`}>
                           {uploadingImage ? 'Uploading...' : 'Upload Image (WebP)'}
@@ -926,7 +923,7 @@ export const AdminPage = () => {
                           />
                         </label>
                         {configOverride.header.imageUrl && (
-                    <button 
+                          <button 
                             type="button"
                             className="secondary-btn"
                             onClick={handleRemoveImage}
@@ -972,10 +969,9 @@ export const AdminPage = () => {
 
           {activeTab === 'history' && (
             <div className="tab-content">
-              <div className="admin-card history-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Session History</h2>
-                  <div className="status-indicator"></div>
                 </div>
                 {sessions.length === 0 ? (
                   <div className="no-data">
@@ -1017,10 +1013,9 @@ export const AdminPage = () => {
 
           {activeTab === 'bluetooth' && (
             <div className="tab-content">
-              <div className="admin-card bluetooth-card">
+              <div className="admin-card">
                 <div className="card-header">
                   <h2>Bluetooth Printer</h2>
-                  <div className={`status-indicator ${isBluetoothConnected ? 'active' : ''}`}></div>
                 </div>
                 
                 {bluetoothError && <div className="error-message">{bluetoothError}</div>}
@@ -1057,11 +1052,10 @@ export const AdminPage = () => {
                         )}
                       </div>
                     )}
-                    <div className="bluetooth-actions" style={{ display: 'flex', gap: '10px', marginTop: '20px', flexDirection: 'column', width: '100%' }}>
+                    <div className="bluetooth-actions">
                       <button 
                         onClick={handleDisconnectBluetooth} 
-                        className="danger-btn disconnect-btn"
-                        style={{ width: '100%' }}
+                        className="danger-btn"
                       >
                         Disconnect Printer
                       </button>
@@ -1069,11 +1063,17 @@ export const AdminPage = () => {
                         onClick={handleTestPrint}
                         disabled={testPrintLoading}
                         className="primary-btn"
-                        style={{ width: '100%' }}
                       >
                         {testPrintLoading ? '🔄 Printing Test...' : '🖨️ Print Test'}
                       </button>
                     </div>
+                  </div>
+                )}
+                {bundleVersion && (
+                  <div className="bundle-version-container">
+                    <span className="bundle-version">
+                      Bundle: {bundleVersion}
+                    </span>
                   </div>
                 )}
               </div>

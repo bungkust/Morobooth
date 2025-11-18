@@ -37,8 +37,8 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
       if (result.state === 'granted') {
         setIsGranted(true);
         if (!isAdminPage && autoProceedIfGranted) {
-          onPermissionGranted();
-          return;
+        onPermissionGranted();
+        return;
         }
       }
       
@@ -68,17 +68,17 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
     } catch (err: any) {
       console.error('Failed to initialize:', err);
       
-      // Error message yang lebih user-friendly
-      let errorMessage = 'Akses kamera ditolak. ';
+      // User-friendly error messages
+      let errorMessage = 'Camera access denied. ';
       
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage += 'Silakan izinkan akses kamera di pengaturan browser Anda, lalu refresh halaman.';
+        errorMessage += 'Please allow camera access in your browser settings, then refresh the page.';
       } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errorMessage += 'Kamera tidak ditemukan. Pastikan kamera terhubung dan tidak digunakan aplikasi lain.';
+        errorMessage += 'Camera not found. Make sure the camera is connected and not being used by another app.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        errorMessage += 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi lain yang menggunakan kamera, lalu coba lagi.';
+        errorMessage += 'Camera is being used by another app. Close other apps using the camera, then try again.';
       } else {
-        errorMessage += 'Silakan refresh halaman dan coba lagi.';
+        errorMessage += 'Please refresh the page and try again.';
       }
       
       setError(errorMessage);
@@ -115,7 +115,7 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
       <div id="permission-gate">
         <div className="permission-content">
           <h1>Morobooth</h1>
-          <p>Memeriksa izin kamera...</p>
+          <p>Checking camera permission...</p>
           <div className="loading-spinner"></div>
         </div>
       </div>
@@ -123,18 +123,18 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   }
 
   return (
-      <div id="permission-gate">
-        <div className="permission-content">
+    <div id="permission-gate">
+      <div className="permission-content">
           <h1 onClick={handleAdminSecretTap} style={{ cursor: 'pointer' }}>
             Morobooth
           </h1>
-          <p>Izinkan akses kamera untuk memulai sesi foto Anda.</p>
+          <p>Allow camera access to start your photo session.</p>
         <button 
           id="permissionBtn" 
           onClick={handleRequestPermission}
           disabled={isLoading}
         >
-          {isLoading ? 'Loading...' : isGranted ? 'Mulai Foto' : 'Izinkan Kamera'}
+          {isLoading ? 'Loading...' : isGranted ? 'Start Photo' : 'Allow Camera'}
         </button>
         {error && (
           <p id="permission-error" className="error-message">

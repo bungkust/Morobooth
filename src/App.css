@@ -1478,14 +1478,52 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 0;
+  padding: 24px 20px;
   gap: 16px;
+  background: var(--c-black);
+  color: var(--c-white);
+  border-bottom: 4px solid var(--c-black);
+  box-shadow: 0 4px 0 0 var(--c-black);
+  margin: 0 -24px 24px -24px;
+  width: calc(100% + 48px);
 }
 
 .admin-header h1 {
-  font-size: 36px;
+  font-size: 32px;
   margin: 0;
   font-family: var(--font-main);
+  font-weight: 700;
+  color: var(--c-white);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  flex: 1;
+  text-align: center;
+}
+
+.admin-header .back-btn-small {
+  padding: 8px 12px;
+  font-size: 18px;
+  font-family: var(--font-main);
+  border: 2px solid var(--c-white);
+  background: transparent;
+  color: var(--c-white);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.1s ease-in-out;
+  box-shadow: 2px 2px 0 0 var(--c-white);
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.admin-header .back-btn-small:hover:not(:disabled) {
+  background: var(--c-white);
+  color: var(--c-black);
+  box-shadow: 1px 1px 0 0 var(--c-white);
+  transform: translate(1px, 1px);
 }
 
 .admin-header .back-btn {
@@ -1519,9 +1557,10 @@ button:disabled {
 .tab-content {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 800px;
+  gap: 24px;
+  max-width: 700px;
   margin: 0 auto;
+  width: 100%;
 }
 
 /* Admin Cards */
@@ -1532,6 +1571,7 @@ button:disabled {
   border-radius: 0;
   padding: 24px;
   transition: all 0.1s ease-in-out;
+  width: 100%;
 }
 
 .admin-card:hover {
@@ -1549,36 +1589,17 @@ button:disabled {
 }
 
 .card-header h2 {
-  font-size: 24px;
+  font-size: 22px;
   margin: 0;
   font-family: var(--font-main);
   color: var(--c-black);
-}
-
-.status-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #ccc;
-  border: 2px solid var(--c-black);
-}
-
-.status-indicator.active {
-  background: #28a745;
-}
-
-.status-indicator.success {
-  background: #28a745;
-}
-
-.status-indicator.error {
-  background: #dc3545;
+  font-weight: 600;
 }
 
 /* Current Session Card */
 .session-info {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
 }
 
@@ -1640,11 +1661,13 @@ button:disabled {
 .session-actions {
   display: flex;
   gap: 12px;
-  margin-top: 16px;
+  margin-top: 20px;
+  grid-column: 1 / -1;
 }
 
 .session-actions button {
   flex: 1;
+  min-height: 44px;
 }
 
 /* Create Session Card */
@@ -1671,7 +1694,7 @@ button:disabled {
   align-items: center;
   margin-bottom: 20px;
   padding: 16px;
-  background: var(--c-white);
+  background: #f8f9fa;
   border: 2px solid var(--c-black);
   box-shadow: 2px 2px 0 0 var(--c-black);
 }
@@ -1699,14 +1722,19 @@ button:disabled {
   font-size: 14px;
   font-family: var(--font-main);
   font-weight: 600;
+  padding: 6px 12px;
+  border: 2px solid var(--c-black);
+  box-shadow: 2px 2px 0 0 var(--c-black);
 }
 
 .config-status .success {
   color: #28a745;
+  background: #d4edda;
 }
 
 .config-status .error {
   color: #dc3545;
+  background: #f8d7da;
 }
 
 .upload-results {
@@ -1779,8 +1807,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
+  gap: 20px;
+  padding: 24px 20px;
 }
 
 .bluetooth-icon {
@@ -1817,53 +1845,76 @@ button:disabled {
   max-width: 300px;
 }
 
-.bluetooth-not-connected .bluetooth-btn,
-.bluetooth-connected .disconnect-btn {
+.bluetooth-not-connected .bluetooth-btn {
   width: 100%;
-  max-width: 300px;
+  max-width: 100%;
+  min-height: 48px;
+}
+
+.bluetooth-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 20px;
+}
+
+.bluetooth-actions button {
+  width: 100%;
+  min-height: 48px;
 }
 
 .printer-details {
   width: 100%;
-  max-width: 400px;
+  max-width: 100%;
   padding: 16px;
-  background: var(--c-white);
+  background: #f8f9fa;
   border: 2px solid var(--c-black);
   box-shadow: 2px 2px 0 0 var(--c-black);
 }
 
-.bluetooth-connected .disconnect-btn {
-  max-width: 300px;
-}
 
 /* Config Card */
 .config-preview {
   margin-bottom: 20px;
-  padding: 16px;
-  background: var(--c-white);
+  padding: 20px;
+  background: #f8f9fa;
   border: 2px solid var(--c-black);
   box-shadow: 2px 2px 0 0 var(--c-black);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 200px;
 }
 
 .preview-text {
   text-align: center;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
-.config-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 180px;
+.preview-text.body-preview {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 2px solid var(--c-black);
 }
 
 .preview-image {
   max-width: 100%;
-  max-height: 180px;
+  max-height: 200px;
+  width: auto;
+  height: auto;
   object-fit: contain;
   border: 2px solid var(--c-black);
   box-shadow: 2px 2px 0 0 var(--c-black);
   background: var(--c-white);
-  padding: 8px;
+  padding: 12px;
 }
 
 .image-placeholder {
@@ -1871,9 +1922,10 @@ button:disabled {
   color: #999;
   font-size: 14px;
   border: 2px dashed #ccc;
-  padding: 24px;
+  padding: 32px 24px;
   width: 100%;
   text-align: center;
+  background: var(--c-white);
 }
 
 .display-mode {
@@ -1945,19 +1997,41 @@ button:disabled {
   font-family: var(--font-main);
   font-weight: bold;
   color: var(--c-black);
-  margin-bottom: 8px;
+  line-height: 1.2;
 }
 
 .sub-text {
   font-size: 18px;
   font-family: var(--font-main);
   color: #666;
+  line-height: 1.2;
+}
+
+.body-preview .main-text {
+  font-size: 20px;
+}
+
+.body-preview .sub-text {
+  font-size: 16px;
 }
 
 .config-form {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.toggle-row {
+  display: flex;
   gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+.toggle-row button {
+  flex: 1;
+  min-width: 100px;
+  min-height: 44px;
 }
 
 .config-form input {
@@ -2234,8 +2308,8 @@ button:disabled {
 
 .upload-btn {
   width: 100%;
-  padding: 16px 32px;
-  font-size: 20px;
+  padding: 14px 24px;
+  font-size: 18px;
   font-family: var(--font-main);
   border: 3px solid var(--c-black);
   background: var(--c-white);
@@ -2244,7 +2318,8 @@ button:disabled {
   text-align: center;
   transition: all 0.1s ease-in-out;
   box-shadow: 4px 4px 0 0 var(--c-black);
-  margin-bottom: 16px;
+  margin-top: 12px;
+  min-height: 48px;
 }
 
 .upload-btn:hover:not(:disabled) {
@@ -2263,7 +2338,7 @@ button:disabled {
 }
 
 .small-btn {
-  padding: 6px 12px;
+  padding: 8px 16px;
   font-size: 14px;
   font-family: var(--font-main);
   border: 2px solid var(--c-black);
@@ -2273,6 +2348,8 @@ button:disabled {
   text-align: center;
   transition: all 0.1s ease-in-out;
   box-shadow: 2px 2px 0 0 var(--c-black);
+  min-height: 36px;
+  white-space: nowrap;
 }
 
 .small-btn:hover:not(:disabled) {
@@ -2472,42 +2549,103 @@ button:disabled {
 /* Admin Page Mobile Responsive */
 @media (max-width: 768px) {
   .admin-header {
-    padding: 12px 0;
+    padding: 20px 16px;
+    margin: 0 -12px 20px -12px;
+    width: calc(100% + 24px);
+    gap: 12px;
+  }
+  
+  .admin-header h1 {
+    font-size: 28px;
+    letter-spacing: 1.5px;
+  }
+  
+  .admin-header .back-btn-small {
+    padding: 6px 10px;
+    font-size: 16px;
+    min-width: 36px;
+    height: 36px;
   }
 
   .admin-container {
-    padding: 0 16px;
+    padding: 0 12px;
+  }
+
+  .admin-content {
+    padding: 16px 0;
+  }
+  
+  .tab-content {
+    max-width: 100%;
+  }
+  
+  .admin-card {
+    padding: 20px;
   }
 
   .bottom-nav {
-    margin: 0 -16px;
+    margin: 0 -12px;
+  }
+  
+  .session-info {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+  
+  .upload-stats {
+    flex-wrap: wrap;
+    gap: 12px;
   }
 }
 
 @media (max-width: 480px) {
+  .admin-container {
+    padding: 0 8px;
+  }
+
   .admin-header {
-    padding: 8px 12px;
+    padding: 16px 12px;
+    margin: 0 -8px 16px -8px;
+    width: calc(100% + 16px);
+    gap: 8px;
   }
   
   .admin-header h1 {
     font-size: 20px;
+    letter-spacing: 1px;
   }
   
-  .admin-header .back-btn {
-    padding: 6px 12px;
-    font-size: 12px;
+  .admin-header .back-btn-small {
+    padding: 6px 8px;
+    font-size: 14px;
+    min-width: 32px;
+    height: 32px;
+  }
+  
+  .admin-header > div {
+    width: 32px;
   }
   
   .admin-content {
-    padding: 8px 12px;
+    padding: 12px 0;
+    overflow-x: hidden;
   }
   
   .tab-content {
     gap: 12px;
+    max-width: 100%;
+    padding: 0;
   }
   
   .admin-card {
-    padding: 12px;
+    padding: 16px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .card-header {
+    margin-bottom: 16px;
+    padding-bottom: 10px;
   }
   
   .admin-card h2 {
@@ -2524,21 +2662,140 @@ button:disabled {
   
   .admin-card input {
     font-size: 16px; /* Prevent zoom on iOS */
-    padding: 8px;
+    padding: 10px;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .admin-card button {
-    padding: 10px 16px;
+    padding: 10px 14px;
     font-size: 14px;
     min-height: 44px;
+    width: 100%;
+    box-sizing: border-box;
   }
   
   .primary-btn,
   .secondary-btn,
   .danger-btn {
-    padding: 10px 16px;
-    font-size: 16px;
+    padding: 10px 14px;
+    font-size: 15px;
     min-height: 44px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .session-actions {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .session-actions button {
+    width: 100%;
+  }
+  
+  .create-form {
+    gap: 12px;
+  }
+  
+  .create-form input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .upload-stats {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+  
+  .config-form {
+    gap: 12px;
+  }
+  
+  .config-form input {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .config-preview {
+    padding: 16px;
+    min-height: 160px;
+    gap: 12px;
+  }
+  
+  .preview-image {
+    max-height: 150px;
+    padding: 8px;
+  }
+  
+  .preview-text.body-preview {
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+  
+  .main-text {
+    font-size: 20px;
+  }
+  
+  .sub-text {
+    font-size: 16px;
+  }
+  
+  .body-preview .main-text {
+    font-size: 18px;
+  }
+  
+  .body-preview .sub-text {
+    font-size: 14px;
+  }
+  
+  .image-placeholder {
+    padding: 24px 16px;
+  }
+  
+  .bundle-version-container {
+    margin-top: 16px;
+    padding-top: 12px;
+  }
+  
+  .bundle-version {
+    font-size: 12px;
+  }
+  
+  .toggle-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .toggle-row button {
+    width: 100%;
+  }
+  
+  .bluetooth-actions {
+    width: 100%;
+  }
+  
+  .bluetooth-actions button {
+    width: 100%;
+  }
+  
+  .printer-details {
+    width: 100%;
+    max-width: 100%;
+    padding: 12px;
+  }
+  
+  .info-row {
+    gap: 4px;
+  }
+  
+  .info-row .label {
+    font-size: 12px;
+  }
+  
+  .info-row .value {
+    font-size: 16px;
   }
   
   .admin-card table {
@@ -2551,13 +2808,22 @@ button:disabled {
   }
   
   .bottom-nav {
-    padding: 6px 8px;
-    gap: 6px;
+    margin: 0 -8px;
+    padding: 8px 0;
   }
   
   .nav-btn {
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+  
+  .nav-icon {
+    font-size: 18px;
+    margin-bottom: 4px;
+  }
+  
+  .nav-label {
+    font-size: 10px;
   }
 }
 
@@ -2722,6 +2988,20 @@ button:disabled {
   display: block;
   margin-top: 6px;
   font-size: 14px;
+}
+
+.bundle-version-container {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid var(--c-black);
+  text-align: center;
+}
+
+.bundle-version {
+  font-family: var(--font-main);
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
 }
 
 .login-form {

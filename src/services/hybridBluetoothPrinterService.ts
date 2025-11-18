@@ -100,12 +100,17 @@ export class HybridBluetoothPrinterService {
     } else {
       // Fallback to Web Bluetooth
       this.webBluetooth = new UniversalBluetoothPrinterService();
+      try {
       const connected = await this.webBluetooth.connect();
       this.isConnected = connected;
       if (connected) {
         this.printerInfo = this.webBluetooth.getPrinterInfo();
       }
       return connected;
+      } catch (error: any) {
+        // Re-throw with better error message
+        throw error;
+      }
     }
   }
 

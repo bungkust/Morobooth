@@ -184,9 +184,21 @@ export class UniversalBluetoothPrinterService {
         }
       }
       return false;
-    } catch (e) {
+    } catch (e: any) {
       console.error('Bluetooth connect error:', e);
-      return false;
+      
+      // Throw error with user-friendly message
+      if (e.name === 'SecurityError' || e.name === 'NotAllowedError') {
+        throw new Error('Bluetooth permission denied. Please allow Bluetooth access in your browser settings.');
+      } else if (e.name === 'NotFoundError') {
+        throw new Error('No Bluetooth printer found. Make sure your printer is turned on and in pairing mode.');
+      } else if (e.name === 'NetworkError') {
+        throw new Error('Failed to connect to printer. Please try again.');
+      } else if (e.message) {
+        throw new Error(e.message);
+      } else {
+        throw new Error('Bluetooth connection failed. Please check your printer and try again.');
+      }
     }
   }
 
