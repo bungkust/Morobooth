@@ -198,7 +198,7 @@ export interface PrinterOutputSettings {
   sharpen?: number; // 0-1
 }
 
-const DEFAULT_PRINTER_OUTPUT: PrinterOutputSettings = {
+export const DEFAULT_PRINTER_OUTPUT: PrinterOutputSettings = {
   threshold: 165,
   gamma: 1.25,
   dithering: true,

@@ -1,12 +1,20 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
 import { createStreetCoffeeReceipt } from './receiptTemplates';
+import { DEFAULT_PRINTER_OUTPUT } from './configService';
+
+interface PrinterInfo {
+  name: string;
+  width?: number;
+  dpi?: number;
+  address?: string;
+}
 
 export class HybridBluetoothPrinterService {
   private webBluetooth: UniversalBluetoothPrinterService | null = null;
   private isNative: boolean = false;
   private isConnected: boolean = false;
-  private printerInfo: any = null;
+  private printerInfo: PrinterInfo | null = null;
   private listenersSetup: boolean = false;
 
   constructor() {
@@ -79,7 +87,7 @@ export class HybridBluetoothPrinterService {
     });
   }
 
-  async scanPrinters(): Promise<any[]> {
+  async scanPrinters(): Promise<unknown[]> {
     if (this.isNative) {
       nativeBridge.sendMessage('SCAN_BLUETOOTH_PRINTERS');
       return []; // Results will come via onMessage
@@ -100,17 +108,19 @@ export class HybridBluetoothPrinterService {
     } else {
       // Fallback to Web Bluetooth
       this.webBluetooth = new UniversalBluetoothPrinterService();
-      try {
       const connected = await this.webBluetooth.connect();
       this.isConnected = connected;
       if (connected) {
-        this.printerInfo = this.webBluetooth.getPrinterInfo();
+        const info = this.webBluetooth.getPrinterInfo();
+        if (info) {
+          this.printerInfo = {
+            name: info.name,
+            width: info.width,
+            dpi: info.dpi
+          };
+        }
       }
       return connected;
-      } catch (error: any) {
-        // Re-throw with better error message
-        throw error;
-      }
     }
   }
 
@@ -169,18 +179,19 @@ export class HybridBluetoothPrinterService {
     
     // Get settings with defaults
     // Use explicit checks to preserve 0 and false values
+    // Use DEFAULT_PRINTER_OUTPUT from configService for consistency
     const threshold = customSettings?.threshold !== undefined 
       ? customSettings.threshold 
-      : 128; // Default threshold for native
+      : DEFAULT_PRINTER_OUTPUT.threshold!;
     const gamma = customSettings?.gamma !== undefined 
       ? customSettings.gamma 
-      : 1;
+      : DEFAULT_PRINTER_OUTPUT.gamma!;
     const applyDithering = customSettings?.dithering !== undefined 
       ? customSettings.dithering 
-      : true;
+      : DEFAULT_PRINTER_OUTPUT.dithering!;
     const sharpenAmount = customSettings?.sharpen !== undefined 
       ? customSettings.sharpen 
-      : 0;
+      : DEFAULT_PRINTER_OUTPUT.sharpen!;
     
     return Promise.race<{ base64: string; width: number; height: number }>([
       new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
@@ -394,7 +405,7 @@ export class HybridBluetoothPrinterService {
     }
   }
 
-  getPrinterInfo(): any {
+  getPrinterInfo(): PrinterInfo | null {
     return this.printerInfo;
   }
 
