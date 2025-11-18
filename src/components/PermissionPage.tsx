@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface PermissionPageProps {
   onPermissionGranted: () => void;
@@ -14,21 +14,32 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
+  const [isGranted, setIsGranted] = useState(false);
+  const [adminTapCount, setAdminTapCount] = useState<number>(0);
+  const adminTapTimeoutRef = useRef<number | null>(null);
 
   // Check camera permission on mount
   useEffect(() => {
     checkCameraPermission();
+    
+    // Cleanup admin tap timeout on unmount
+    return () => {
+      if (adminTapTimeoutRef.current) {
+        window.clearTimeout(adminTapTimeoutRef.current);
+      }
+    };
   }, []);
 
   const checkCameraPermission = async () => {
     try {
-      // Check if camera permission is already granted
       const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
       
-      if (result.state === 'granted' && !isAdminPage && autoProceedIfGranted) {
-        // Permission already granted, proceed to photo booth (but not if we're on admin page)
-        onPermissionGranted();
-        return;
+      if (result.state === 'granted') {
+        setIsGranted(true);
+        if (!isAdminPage && autoProceedIfGranted) {
+          onPermissionGranted();
+          return;
+        }
       }
       
       setIsChecking(false);
@@ -43,7 +54,6 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
     setError(null);
     
     try {
-      // Request camera permission
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
@@ -53,17 +63,51 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
         audio: false
       });
       
-      // Stop the stream as we'll let p5.js handle it
       stream.getTracks().forEach(track => track.stop());
-      
-      // Permission granted, proceed to photo booth
       onPermissionGranted();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to initialize:', err);
-      setError(`Gagal akses kamera (${(err as Error).name}). Pastikan Anda memberi izin.`);
+      
+      // Error message yang lebih user-friendly
+      let errorMessage = 'Akses kamera ditolak. ';
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMessage += 'Silakan izinkan akses kamera di pengaturan browser Anda, lalu refresh halaman.';
+      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+        errorMessage += 'Kamera tidak ditemukan. Pastikan kamera terhubung dan tidak digunakan aplikasi lain.';
+      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+        errorMessage += 'Kamera sedang digunakan aplikasi lain. Tutup aplikasi lain yang menggunakan kamera, lalu coba lagi.';
+      } else {
+        errorMessage += 'Silakan refresh halaman dan coba lagi.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleAdminSecretTap = () => {
+    setAdminTapCount((prev) => {
+      const next = prev + 1;
+      if (adminTapTimeoutRef.current) {
+        window.clearTimeout(adminTapTimeoutRef.current);
+        adminTapTimeoutRef.current = null;
+      }
+
+      if (next >= 4) {
+        setTimeout(() => {
+          window.location.href = '/admin';
+        }, 0);
+        return 0;
+      }
+
+      adminTapTimeoutRef.current = window.setTimeout(() => {
+        setAdminTapCount(0);
+        adminTapTimeoutRef.current = null;
+      }, 1500);
+      return next;
+    });
   };
 
   if (isChecking) {
@@ -79,40 +123,24 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   }
 
   return (
-    <div id="permission-gate">
-      <div className="permission-content">
-        <h1>Morobooth</h1>
-        <p>Izinkan akses kamera untuk memulai sesi foto Anda.</p>
+      <div id="permission-gate">
+        <div className="permission-content">
+          <h1 onClick={handleAdminSecretTap} style={{ cursor: 'pointer' }}>
+            Morobooth
+          </h1>
+          <p>Izinkan akses kamera untuk memulai sesi foto Anda.</p>
         <button 
           id="permissionBtn" 
           onClick={handleRequestPermission}
           disabled={isLoading}
         >
-          {isLoading ? 'Loading...' : 'Izinkan Kamera'}
+          {isLoading ? 'Loading...' : isGranted ? 'Mulai Foto' : 'Izinkan Kamera'}
         </button>
         {error && (
           <p id="permission-error" className="error-message">
             {error}
           </p>
         )}
-        
-        {/* Admin Access Button */}
-        <div style={{ marginTop: '20px', textAlign: 'center' }}>
-          <button 
-            onClick={() => window.location.href = '/admin'}
-            style={{
-              padding: '8px 16px',
-              fontSize: '14px',
-              background: '#6c757d',
-              color: 'white',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: 'pointer'
-            }}
-          >
-            Admin Panel
-          </button>
-        </div>
       </div>
     </div>
   );
