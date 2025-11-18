@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 declare global {
   interface Window {
@@ -188,6 +188,8 @@ export const AdminPage = () => {
   const [bluetoothError, setBluetoothError] = useState<string>('');
   const [printerInfo, setPrinterInfo] = useState<any>(null);
   const [testPrintLoading, setTestPrintLoading] = useState(false);
+  const [testPrintImageLoading, setTestPrintImageLoading] = useState(false);
+  const testPrintImageInputRef = useRef<HTMLInputElement>(null);
   const [bundleVersion, setBundleVersion] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   
@@ -619,6 +621,74 @@ export const AdminPage = () => {
       showNotification('Test print failed: ' + errorMsg, 'error');
     } finally {
       setTestPrintLoading(false);
+    }
+  };
+
+  const handleTestPrintImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    
+    // Reset file input immediately to allow selecting same file again
+    if (testPrintImageInputRef.current) {
+      testPrintImageInputRef.current.value = '';
+    }
+
+    if (!file) return;
+
+    if (!bluetoothPrinter || !isBluetoothConnected) {
+      showNotification('Printer not connected. Please connect printer first.', 'error');
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showNotification('Please select an image file', 'error');
+      return;
+    }
+
+    // Validate file size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      showNotification('Image too large (max 10MB)', 'error');
+      return;
+    }
+
+    setTestPrintImageLoading(true);
+    setBluetoothError('');
+
+    try {
+      // Convert file to dataURL using FileReader
+      const imageDataURL = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (typeof reader.result === 'string') {
+            resolve(reader.result);
+          } else {
+            reject(new Error('Failed to read image file'));
+          }
+        };
+        reader.onerror = () => {
+          reject(new Error('Failed to read image file'));
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // Get printer width from printer info or use default
+      const receiptWidth = printerInfo?.width ?? 384;
+      
+      console.log('Test print image: Printing uploaded image...');
+      const success = await bluetoothPrinter.printImage(imageDataURL, receiptWidth);
+      
+      if (success) {
+        showNotification('Test print sent successfully! Check your printer.', 'success');
+      } else {
+        throw new Error('Print failed');
+      }
+    } catch (error) {
+      console.error('Test print image error:', error);
+      const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+      setBluetoothError('Test print failed: ' + errorMsg);
+      showNotification('Test print failed: ' + errorMsg, 'error');
+    } finally {
+      setTestPrintImageLoading(false);
     }
   };
 
@@ -1077,6 +1147,20 @@ export const AdminPage = () => {
                       >
                         {testPrintLoading ? '🔄 Printing Test...' : '🖨️ Print Test'}
                       </button>
+                      <button 
+                        onClick={() => testPrintImageInputRef.current?.click()}
+                        disabled={testPrintImageLoading || !isBluetoothConnected}
+                        className="primary-btn"
+                      >
+                        {testPrintImageLoading ? '🔄 Printing...' : '📷 Print Custom Image'}
+                      </button>
+                      <input
+                        ref={testPrintImageInputRef}
+                        type="file"
+                        accept="image/png, image/jpeg, image/jpg, image/webp, image/*"
+                        onChange={handleTestPrintImage}
+                        style={{ display: 'none' }}
+                      />
                     </div>
                   </div>
                 )}

@@ -255,7 +255,11 @@ export class HybridBluetoothPrinterService {
             for (let i = 0; i < imageData.data.length; i += 4) {
               const pixelIndex = i / 4;
               const gray = imageData.data[i]; // R channel
-              const v = gray < threshold ? 1 : 0;
+              // Optimize: if dithering was not applied, imageData is already 0 or 255
+              // So we can use direct comparison instead of redundant threshold check
+              const v = applyDithering 
+                ? (gray < threshold ? 1 : 0)  // Dithering applied: may have values 0-255, use threshold
+                : (gray === 0 ? 1 : 0);        // No dithering: already 0 or 255, use direct check
               bitmap[pixelIndex] = v;
               if (v === 1) blackCount++; else whiteCount++;
             }
