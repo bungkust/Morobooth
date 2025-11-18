@@ -189,3 +189,63 @@ export function getConfigPreview(): string {
   }
   return 'Using config.txt values';
 }
+
+// Printer Output Settings
+export interface PrinterOutputSettings {
+  threshold?: number; // 0-255
+  gamma?: number; // >= 1
+  dithering?: boolean;
+  sharpen?: number; // 0-1
+}
+
+const DEFAULT_PRINTER_OUTPUT: PrinterOutputSettings = {
+  threshold: 165,
+  gamma: 1.25,
+  dithering: true,
+  sharpen: 0.45
+};
+
+export function getPrinterOutputSettings(): PrinterOutputSettings {
+  try {
+    const stored = localStorage.getItem('morobooth_printer_output_settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Use explicit checks to preserve 0 and false values
+      return {
+        threshold: parsed.threshold !== undefined ? parsed.threshold : DEFAULT_PRINTER_OUTPUT.threshold,
+        gamma: parsed.gamma !== undefined ? parsed.gamma : DEFAULT_PRINTER_OUTPUT.gamma,
+        dithering: parsed.dithering !== undefined ? parsed.dithering : DEFAULT_PRINTER_OUTPUT.dithering,
+        sharpen: parsed.sharpen !== undefined ? parsed.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to parse printer output settings:', error);
+  }
+  
+  return { ...DEFAULT_PRINTER_OUTPUT };
+}
+
+export function setPrinterOutputSettings(settings: PrinterOutputSettings): void {
+  try {
+    // Use explicit checks to preserve 0 and false values
+    const payload: PrinterOutputSettings = {
+      threshold: settings.threshold !== undefined ? settings.threshold : DEFAULT_PRINTER_OUTPUT.threshold,
+      gamma: settings.gamma !== undefined ? settings.gamma : DEFAULT_PRINTER_OUTPUT.gamma,
+      dithering: settings.dithering !== undefined ? settings.dithering : DEFAULT_PRINTER_OUTPUT.dithering,
+      sharpen: settings.sharpen !== undefined ? settings.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen
+    };
+    localStorage.setItem('morobooth_printer_output_settings', JSON.stringify(payload));
+    console.log('Printer output settings saved:', payload);
+  } catch (error) {
+    console.error('Failed to save printer output settings:', error);
+    throw new Error('Failed to save printer output settings');
+  }
+}
+
+export function resetPrinterOutputSettings(): void {
+  try {
+    localStorage.removeItem('morobooth_printer_output_settings');
+  } catch (error) {
+    console.error('Failed to reset printer output settings:', error);
+  }
+}

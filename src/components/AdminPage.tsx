@@ -16,8 +16,8 @@ import {
 import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
 import { bulkUploadPhotos, type UploadResult } from '../services/uploadService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode } from '../services/configService';
-import { getConfigOverride, setConfigOverride } from '../services/configService';
+import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings } from '../services/configService';
+import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings } from '../services/configService';
 import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
@@ -190,6 +190,14 @@ export const AdminPage = () => {
   const [testPrintLoading, setTestPrintLoading] = useState(false);
   const [bundleVersion, setBundleVersion] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  
+  // Printer output settings
+  const [printerOutputSettings, setPrinterOutputSettingsState] = useState<PrinterOutputSettings>({
+    threshold: 165,
+    gamma: 1.25,
+    dithering: true,
+    sharpen: 0.45
+  });
 
   // Helper untuk show notification (ganti alert)
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -246,6 +254,9 @@ export const AdminPage = () => {
   useEffect(() => {
     if (authenticated) {
       loadData();
+      // Load printer output settings
+      const savedSettings = getPrinterOutputSettings();
+      setPrinterOutputSettingsState(savedSettings);
     }
   }, [authenticated, loadData]);
 
@@ -1076,6 +1087,138 @@ export const AdminPage = () => {
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Printer Output Settings Section */}
+              <div className="admin-card" style={{ marginTop: '20px' }}>
+                <div className="card-header">
+                  <h2>Adjust Printer Output</h2>
+                </div>
+                <div className="printer-output-settings">
+                  <p className="settings-description">
+                    Adjust these settings to fine-tune the print quality. Changes will be applied to all future prints.
+                  </p>
+                  
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Threshold: {printerOutputSettings.threshold}
+                      <span className="setting-help">(0-255, higher = darker)</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="255"
+                      value={printerOutputSettings.threshold ?? 165}
+                      onChange={(e) => setPrinterOutputSettingsState({
+                        ...printerOutputSettings,
+                        threshold: parseInt(e.target.value)
+                      })}
+                      className="slider-input"
+                    />
+                    <div className="slider-labels">
+                      <span>Lighter</span>
+                      <span>Darker</span>
+                    </div>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Gamma: {printerOutputSettings.gamma?.toFixed(2)}
+                      <span className="setting-help">(≥1, higher = darker mid-tones)</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.5"
+                      step="0.05"
+                      value={printerOutputSettings.gamma ?? 1.25}
+                      onChange={(e) => setPrinterOutputSettingsState({
+                        ...printerOutputSettings,
+                        gamma: parseFloat(e.target.value)
+                      })}
+                      className="slider-input"
+                    />
+                    <div className="slider-labels">
+                      <span>Lighter</span>
+                      <span>Darker</span>
+                    </div>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Sharpen: {printerOutputSettings.sharpen?.toFixed(2)}
+                      <span className="setting-help">(0-1, higher = sharper edges)</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      value={printerOutputSettings.sharpen ?? 0.45}
+                      onChange={(e) => setPrinterOutputSettingsState({
+                        ...printerOutputSettings,
+                        sharpen: parseFloat(e.target.value)
+                      })}
+                      className="slider-input"
+                    />
+                    <div className="slider-labels">
+                      <span>Softer</span>
+                      <span>Sharper</span>
+                    </div>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label toggle-label">
+                      <span>Enable Dithering</span>
+                      <span className="setting-help">(Error-diffusion for smoother gradients)</span>
+                      <div 
+                        className={`toggle-switch ${printerOutputSettings.dithering ?? true ? 'active' : ''}`}
+                        onClick={() => setPrinterOutputSettingsState({
+                          ...printerOutputSettings,
+                          dithering: !(printerOutputSettings.dithering ?? true)
+                        })}
+                      >
+                        <div className="toggle-slider"></div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="printer-output-actions">
+                    <button
+                      onClick={() => {
+                        try {
+                          setPrinterOutputSettings(printerOutputSettings);
+                          // Verify the settings were saved
+                          const saved = getPrinterOutputSettings();
+                          console.log('Settings saved successfully:', saved);
+                          showNotification('Printer output settings saved! Changes will apply to next print.', 'success');
+                        } catch (error) {
+                          console.error('Failed to save settings:', error);
+                          showNotification('Failed to save settings. Please try again.', 'error');
+                        }
+                      }}
+                      className="primary-btn"
+                    >
+                      Save Settings
+                    </button>
+                    <button
+                      onClick={() => {
+                        const defaults = {
+                          threshold: 165,
+                          gamma: 1.25,
+                          dithering: true,
+                          sharpen: 0.45
+                        };
+                        setPrinterOutputSettingsState(defaults);
+                        resetPrinterOutputSettings();
+                        showNotification('Settings reset to defaults', 'info');
+                      }}
+                      className="secondary-btn"
+                    >
+                      Reset to Defaults
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

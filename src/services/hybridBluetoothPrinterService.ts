@@ -155,6 +155,33 @@ export class HybridBluetoothPrinterService {
   ): Promise<{ base64: string; width: number; height: number }> {
     const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
     
+    // Load custom printer output settings from localStorage if available
+    let customSettings: { threshold?: number; gamma?: number; dithering?: boolean; sharpen?: number } | null = null;
+    try {
+      const stored = localStorage.getItem('morobooth_printer_output_settings');
+      if (stored) {
+        customSettings = JSON.parse(stored);
+        console.log('Native printer: Using custom settings:', customSettings);
+      }
+    } catch (error) {
+      console.warn('Native printer: Failed to load custom settings:', error);
+    }
+    
+    // Get settings with defaults
+    // Use explicit checks to preserve 0 and false values
+    const threshold = customSettings?.threshold !== undefined 
+      ? customSettings.threshold 
+      : 128; // Default threshold for native
+    const gamma = customSettings?.gamma !== undefined 
+      ? customSettings.gamma 
+      : 1;
+    const applyDithering = customSettings?.dithering !== undefined 
+      ? customSettings.dithering 
+      : true;
+    const sharpenAmount = customSettings?.sharpen !== undefined 
+      ? customSettings.sharpen 
+      : 0;
+    
     return Promise.race<{ base64: string; width: number; height: number }>([
       new Promise<{ base64: string; width: number; height: number }>((resolve, reject) => {
         const img = new Image();
@@ -184,8 +211,31 @@ export class HybridBluetoothPrinterService {
             ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
             const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
             
-            // Apply ordered dithering directly to ImageData
-            this.applyOrderedDither(imageData);
+            // Apply sharpen if enabled
+            if (sharpenAmount > 0) {
+              this.applySharpenToImageData(imageData, sharpenAmount);
+            }
+            
+            // Apply gamma correction
+            if (gamma !== 1) {
+              this.applyGammaToImageData(imageData, gamma);
+            }
+            
+            // Apply dithering based on settings
+            if (applyDithering) {
+              // Use ordered dithering for native (faster than Floyd-Steinberg)
+              this.applyOrderedDither(imageData);
+            } else {
+              // Simple threshold without dithering
+              const data = imageData.data;
+              for (let i = 0; i < data.length; i += 4) {
+                const gray = data[i]; // R channel (already grayscale)
+                const value = gray < threshold ? 0 : 255;
+                data[i] = value;
+                data[i + 1] = value;
+                data[i + 2] = value;
+              }
+            }
             
             // Convert to 1-bit bitmap (0=white, 1=black)
             const bitmap = new Uint8Array(targetWidth * targetHeight);
@@ -194,7 +244,7 @@ export class HybridBluetoothPrinterService {
             for (let i = 0; i < imageData.data.length; i += 4) {
               const pixelIndex = i / 4;
               const gray = imageData.data[i]; // R channel
-              const v = gray < 128 ? 1 : 0;
+              const v = gray < threshold ? 1 : 0;
               bitmap[pixelIndex] = v;
               if (v === 1) blackCount++; else whiteCount++;
             }
@@ -209,7 +259,12 @@ export class HybridBluetoothPrinterService {
               totalPixels: blackCount + whiteCount,
               blackPixels: blackCount,
               whitePixels: whiteCount,
-              blackPercentage: (blackCount + whiteCount) > 0 ? ((blackCount / (blackCount + whiteCount)) * 100).toFixed(2) + '%' : '0%'
+              blackPercentage: (blackCount + whiteCount) > 0 ? ((blackCount / (blackCount + whiteCount)) * 100).toFixed(2) + '%' : '0%',
+              threshold,
+              gamma,
+              sharpen: sharpenAmount,
+              dithering: applyDithering,
+              usingCustomSettings: customSettings !== null
             });
             
             // Enhanced debug logging for chunking
@@ -260,6 +315,56 @@ export class HybridBluetoothPrinterService {
     }
     
     return btoa(segments.join(''));
+  }
+
+  private applySharpenToImageData(imageData: ImageData, amount: number): void {
+    const strength = Math.min(Math.max(amount, 0), 1);
+    if (strength <= 0) return;
+
+    const { data, width, height } = imageData;
+    const original = new Uint8ClampedArray(data);
+    const kernel = [
+      0, -strength, 0,
+      -strength, 1 + 4 * strength, -strength,
+      0, -strength, 0
+    ];
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        let value = 0;
+
+        for (let ky = -1; ky <= 1; ky++) {
+          const sampleY = Math.min(height - 1, Math.max(0, y + ky));
+          for (let kx = -1; kx <= 1; kx++) {
+            const sampleX = Math.min(width - 1, Math.max(0, x + kx));
+            const weight = kernel[(ky + 1) * 3 + (kx + 1)];
+            const idx = (sampleY * width + sampleX) * 4;
+            value += original[idx] * weight; // Use R channel (grayscale)
+          }
+        }
+
+        const destIdx = (y * width + x) * 4;
+        const clamped = Math.min(255, Math.max(0, Math.round(value)));
+        data[destIdx] = clamped;
+        data[destIdx + 1] = clamped;
+        data[destIdx + 2] = clamped;
+      }
+    }
+  }
+
+  private applyGammaToImageData(imageData: ImageData, gamma: number): void {
+    if (gamma === 1) return;
+
+    const { data } = imageData;
+    for (let i = 0; i < data.length; i += 4) {
+      const gray = data[i]; // R channel (grayscale)
+      const normalized = gray / 255;
+      const gammaCorrected = Math.pow(normalized, gamma);
+      const adjusted = Math.min(255, Math.max(0, Math.round(gammaCorrected * 255)));
+      data[i] = adjusted;
+      data[i + 1] = adjusted;
+      data[i + 2] = adjusted;
+    }
   }
 
   private applyOrderedDither(imageData: ImageData): void {

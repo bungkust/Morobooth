@@ -1874,6 +1874,144 @@ button:disabled {
   box-shadow: 2px 2px 0 0 var(--c-black);
 }
 
+/* Printer Output Settings */
+.printer-output-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 8px 0;
+}
+
+.settings-description {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.setting-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.setting-group .field-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--c-black);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.setting-help {
+  font-size: 12px;
+  font-weight: normal;
+  color: #666;
+  font-style: italic;
+}
+
+.slider-input {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: #e0e0e0;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c-black);
+  cursor: pointer;
+  border: 2px solid var(--c-white);
+  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.slider-input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c-black);
+  cursor: pointer;
+  border: 2px solid var(--c-white);
+  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #666;
+  padding: 0 4px;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+
+.toggle-label > span:first-child {
+  font-weight: 600;
+  min-width: 140px;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 50px;
+  height: 26px;
+  background: #ccc;
+  border-radius: 13px;
+  border: 2px solid var(--c-black);
+  cursor: pointer;
+  transition: background 0.3s ease;
+  flex-shrink: 0;
+  box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.1);
+}
+
+.toggle-switch.active {
+  background: var(--c-black);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--c-white);
+  border-radius: 50%;
+  border: 2px solid var(--c-black);
+  transition: transform 0.3s ease;
+  box-shadow: 1px 1px 0 0 rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-slider {
+  transform: translateX(24px);
+}
+
+.printer-output-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.printer-output-actions button {
+  flex: 1;
+  min-width: 120px;
+}
+
 
 /* Config Card */
 .config-preview {
@@ -2784,6 +2922,49 @@ button:disabled {
     width: 100%;
     max-width: 100%;
     padding: 12px;
+  }
+  
+  .printer-output-settings {
+    gap: 20px;
+  }
+  
+  .setting-group {
+    gap: 6px;
+  }
+  
+  .setting-group .field-label {
+    font-size: 14px;
+  }
+  
+  .toggle-label > span:first-child {
+    min-width: 120px;
+  }
+  
+  .toggle-switch {
+    width: 44px;
+    height: 24px;
+  }
+  
+  .toggle-slider {
+    width: 16px;
+    height: 16px;
+  }
+  
+  .toggle-switch.active .toggle-slider {
+    transform: translateX(20px);
+  }
+  
+  .setting-help {
+    font-size: 11px;
+  }
+  
+  .printer-output-actions {
+    flex-direction: column;
+  }
+  
+  .printer-output-actions button {
+    width: 100%;
+    min-width: 100%;
   }
   
   .info-row {
