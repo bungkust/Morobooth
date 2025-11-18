@@ -15,7 +15,7 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(true);
   const [isGranted, setIsGranted] = useState(false);
-  const [adminTapCount, setAdminTapCount] = useState<number>(0);
+  const [, setAdminTapCount] = useState<number>(0);
   const adminTapTimeoutRef = useRef<number | null>(null);
 
   // Check camera permission on mount
