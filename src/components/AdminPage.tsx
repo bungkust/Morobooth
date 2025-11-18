@@ -189,6 +189,13 @@ export const AdminPage = () => {
   const [printerInfo, setPrinterInfo] = useState<any>(null);
   const [testPrintLoading, setTestPrintLoading] = useState(false);
   const [bundleVersion, setBundleVersion] = useState<string | null>(null);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  // Helper untuk show notification (ganti alert)
+  const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -299,11 +306,18 @@ export const AdminPage = () => {
       }
     }, 1000);
     
+    // Listen for Bluetooth errors from service
+    const handleBluetoothError = (e: any) => {
+      showNotification('Bluetooth Error: ' + e.detail.error, 'error');
+    };
+    window.addEventListener('bluetoothError', handleBluetoothError);
+
     return () => {
       window.removeEventListener('bluetoothStatusChange', statusHandler);
+      window.removeEventListener('bluetoothError', handleBluetoothError);
       clearInterval(checkStatus);
     };
-  }, [bluetoothPrinter, isBluetoothConnected]);
+  }, [bluetoothPrinter, isBluetoothConnected, showNotification]);
 
   const handleLogin = useCallback(() => {
     const adminPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123';
@@ -348,7 +362,7 @@ export const AdminPage = () => {
         await clearAllData();
         setError('');
         await loadData();
-        alert('All data cleared successfully!');
+        showNotification('Semua data berhasil dihapus!', 'success');
       } catch (err) {
         console.error('Error clearing all data:', err);
         setError('Failed to clear all data');
@@ -359,7 +373,7 @@ export const AdminPage = () => {
   async function viewSessionPhotos(sessionCode: string) {
     const photos = await getPhotosBySession(sessionCode);
     const uploaded = photos.filter(p => p.uploaded).length;
-    alert(`Session ${sessionCode}:\n${photos.length} total photos\n${uploaded} uploaded to cloud\n${photos.length - uploaded} pending upload`);
+    showNotification(`Session ${sessionCode}: ${photos.length} foto total, ${uploaded} terupload, ${photos.length - uploaded} pending`, 'info');
   }
 
   // Config handlers
@@ -432,7 +446,7 @@ export const AdminPage = () => {
         console.error('syncConfigToSupabase failed:', error);
       });
       setConfigError('');
-      alert('Configuration saved successfully!');
+      showNotification('Konfigurasi berhasil disimpan!', 'success');
     } catch (err) {
       setConfigError('Failed to save configuration');
     }
@@ -461,7 +475,7 @@ export const AdminPage = () => {
           console.error('syncConfigToSupabase (clear) failed:', error);
         });
         setConfigError('');
-        alert('Configuration cleared!');
+        showNotification('Konfigurasi berhasil dihapus!', 'success');
       } catch (err) {
         setConfigError('Failed to clear configuration');
       }
@@ -520,7 +534,7 @@ export const AdminPage = () => {
       } else {
         if (!('bluetooth' in navigator)) {
           setBluetoothError('Web Bluetooth not supported');
-          alert('Web Bluetooth not supported in this browser');
+          showNotification('Web Bluetooth tidak didukung di browser ini', 'error');
           return;
         }
         
@@ -529,7 +543,7 @@ export const AdminPage = () => {
           setIsBluetoothConnected(true);
           const info = bluetoothPrinter.getPrinterInfo();
           setPrinterInfo(info);
-          alert(`Connected to ${info?.name || 'Printer'}`);
+          showNotification(`Terhubung ke ${info?.name || 'Printer'}`, 'success');
         } else {
           setBluetoothError('Failed to connect to printer');
         }
@@ -537,7 +551,7 @@ export const AdminPage = () => {
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error';
       setBluetoothError(msg);
-      alert('Bluetooth connect error: ' + msg);
+      showNotification('Error koneksi Bluetooth: ' + msg, 'error');
     }
   };
 
@@ -554,7 +568,7 @@ export const AdminPage = () => {
 
   const handleTestPrint = async () => {
     if (!bluetoothPrinter || !isBluetoothConnected) {
-      alert('Printer tidak terhubung. Silakan connect printer terlebih dahulu.');
+      showNotification('Printer tidak terhubung. Silakan connect printer terlebih dahulu.', 'error');
       return;
     }
 
@@ -567,7 +581,7 @@ export const AdminPage = () => {
       const success = await bluetoothPrinter.printStreetCoffeeReceipt(receiptWidth);
       
       if (success) {
-        alert('Test print berhasil dikirim! Cek printer Anda untuk struk Street Coffee.');
+        showNotification('Test print berhasil dikirim! Cek printer Anda untuk struk Street Coffee.', 'success');
       } else {
         throw new Error('Print gagal');
       }
@@ -575,7 +589,7 @@ export const AdminPage = () => {
       console.error('Test print error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Unknown error';
       setBluetoothError('Test print gagal: ' + errorMsg);
-      alert('Test print gagal: ' + errorMsg);
+      showNotification('Test print gagal: ' + errorMsg, 'error');
     } finally {
       setTestPrintLoading(false);
     }
@@ -626,6 +640,23 @@ export const AdminPage = () => {
 
   return (
     <div className="admin-page">
+      {notification && (
+        <div 
+          className={`admin-notification admin-notification-${notification.type}`}
+          onClick={() => setNotification(null)}
+        >
+          {notification.message}
+          <button 
+            className="admin-notification-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              setNotification(null);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="admin-container">
         <div className="admin-header">
           <h1>Admin Panel</h1>

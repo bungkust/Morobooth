@@ -57,6 +57,13 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [highResImageDataURL, setHighResImageDataURL] = useState<string | null>(null);
   const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Helper untuk show notification (ganti alert)
+  const showNotification = (message: string, type: 'success' | 'error' = 'error') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   // Helper: compose final image (with QR if available) and return dataURL
   const composeImageForPrint = async (photoId?: string): Promise<string | null> => {
@@ -245,7 +252,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       console.log('Print check - bluetoothPrinter:', !!bluetoothPrinter);
       console.log('Print check - isBluetoothConnected:', isBluetoothConnected);
       if (!bluetoothPrinter || !isBluetoothConnected) {
-        alert('Silahkan connect printer di halaman admin terlebih dahulu');
+        showNotification('Silakan connect printer di halaman admin terlebih dahulu', 'error');
         return;
       }
 
@@ -258,7 +265,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
         if (!highResDataURL) {
           console.error('Final composite not found for saving');
-          alert('Gagal: Foto tidak ditemukan');
+          showNotification('Gagal: Foto tidak ditemukan', 'error');
           return;
         }
 
@@ -277,7 +284,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           }
         } catch (saveError) {
           console.error('Failed to save photo locally:', saveError);
-          alert('Gagal menyimpan foto. Silakan coba lagi.');
+          showNotification('Gagal menyimpan foto. Silakan coba lagi.', 'error');
           return;
         }
       } else {
@@ -300,7 +307,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       console.log('Starting Bluetooth print...');
       const printDataURL = dataURL || highResDataURL;
       if (!printDataURL) {
-        alert('Gagal: Foto tidak ditemukan untuk print');
+        showNotification('Gagal: Foto tidak ditemukan untuk print', 'error');
         return;
       }
       await bluetoothPrinter.printImage(printDataURL);
@@ -310,7 +317,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       
     } catch (error) {
       console.error('Print failed:', error);
-      alert('Gagal mencetak. Silakan coba lagi.');
+      showNotification('Gagal mencetak. Silakan coba lagi.', 'error');
     }
   };
 
@@ -356,6 +363,23 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
 
   return (
     <>
+      {notification && (
+        <div 
+          className={`photo-notification photo-notification-${notification.type}`}
+          onClick={() => setNotification(null)}
+        >
+          {notification.message}
+          <button 
+            className="photo-notification-close"
+            onClick={(e) => {
+              e.stopPropagation();
+              setNotification(null);
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
       <div className="app-header">
         <h1 className="app-title">MOROBOOTH</h1>
         <p className="template-info">Layout: {template.name}</p>

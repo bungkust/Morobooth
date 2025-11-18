@@ -54,7 +54,11 @@ export class HybridBluetoothPrinterService {
 
     nativeBridge.onMessage('BLUETOOTH_ERROR', (data) => {
       console.error('Native Bluetooth error:', data.error);
-      alert('Bluetooth Error: ' + data.error);
+      // Dispatch custom event instead of alert
+      const event = new CustomEvent('bluetoothError', { 
+        detail: { error: data.error } 
+      });
+      window.dispatchEvent(event);
     });
 
     nativeBridge.onMessage('PRINT_SUCCESS', (data) => {
