@@ -35,12 +35,17 @@ export function orderedDither(gfx: any): void {
 /**
  * Dithering Floyd-Steinberg.
  * High quality, slow. For final composition.
+ * @param p - p5 instance
+ * @param img - Image to dither
+ * @param threshold - Optional threshold value (0-255, default: 128)
  */
-export function floydSteinbergDither(p: any, img: any): any {
+export function floydSteinbergDither(p: any, img: any, threshold?: number): any {
   const ditheredImg = p.createImage(img.width, img.height);
   ditheredImg.copy(img, 0, 0, img.width, img.height, 0, 0, ditheredImg.width, ditheredImg.height);
   
   ditheredImg.loadPixels();
+  
+  const ditherThreshold = threshold ?? 128; // Default 128 if not provided
   
   const getPix = (x: number, y: number): number => {
     if (x < 0 || x >= ditheredImg.width || y < 0 || y >= ditheredImg.height) return 0;
@@ -60,7 +65,7 @@ export function floydSteinbergDither(p: any, img: any): any {
   for (let y = 0; y < ditheredImg.height; y++) {
     for (let x = 0; x < ditheredImg.width; x++) {
       const oldVal = getPix(x, y);
-      const newVal = (oldVal < 128) ? 0 : 255; // Threshold 50%
+      const newVal = (oldVal < ditherThreshold) ? 0 : 255; // Use configurable threshold
       setPix(x, y, newVal);
 
       const err = oldVal - newVal;

@@ -192,17 +192,34 @@ export function getConfigPreview(): string {
 
 // Printer Output Settings
 export interface PrinterOutputSettings {
+  // Existing Print Settings
   threshold?: number; // 0-255
   gamma?: number; // >= 1
   dithering?: boolean;
   sharpen?: number; // 0-1
+  
+  // New: Capture Stage
+  captureGrayscale?: boolean; // Enable/disable grayscale at capture (default: true)
+  
+  // New: Preview Stage
+  previewGrayscale?: boolean; // Enable/disable grayscale in preview (default: true)
+  previewDither?: boolean; // Enable/disable ordered dither in preview (default: true)
+  
+  // New: Composition Stage
+  compositionDither?: boolean; // Enable/disable Floyd-Steinberg dither (default: true)
+  compositionDitherThreshold?: number; // Threshold for composition dither (0-255, default: 128)
 }
 
-export const DEFAULT_PRINTER_OUTPUT: PrinterOutputSettings = {
+export const DEFAULT_PRINTER_OUTPUT: Required<PrinterOutputSettings> = {
   threshold: 165,
   gamma: 1.25,
   dithering: true,
-  sharpen: 0.45
+  sharpen: 0.45,
+  captureGrayscale: true,
+  previewGrayscale: true,
+  previewDither: true,
+  compositionDither: true,
+  compositionDitherThreshold: 128
 };
 
 export function getPrinterOutputSettings(): PrinterOutputSettings {
@@ -215,7 +232,13 @@ export function getPrinterOutputSettings(): PrinterOutputSettings {
         threshold: parsed.threshold !== undefined ? parsed.threshold : DEFAULT_PRINTER_OUTPUT.threshold,
         gamma: parsed.gamma !== undefined ? parsed.gamma : DEFAULT_PRINTER_OUTPUT.gamma,
         dithering: parsed.dithering !== undefined ? parsed.dithering : DEFAULT_PRINTER_OUTPUT.dithering,
-        sharpen: parsed.sharpen !== undefined ? parsed.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen
+        sharpen: parsed.sharpen !== undefined ? parsed.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen,
+        // New fields
+        captureGrayscale: parsed.captureGrayscale !== undefined ? parsed.captureGrayscale : DEFAULT_PRINTER_OUTPUT.captureGrayscale,
+        previewGrayscale: parsed.previewGrayscale !== undefined ? parsed.previewGrayscale : DEFAULT_PRINTER_OUTPUT.previewGrayscale,
+        previewDither: parsed.previewDither !== undefined ? parsed.previewDither : DEFAULT_PRINTER_OUTPUT.previewDither,
+        compositionDither: parsed.compositionDither !== undefined ? parsed.compositionDither : DEFAULT_PRINTER_OUTPUT.compositionDither,
+        compositionDitherThreshold: parsed.compositionDitherThreshold !== undefined ? parsed.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold
       };
     }
   } catch (error) {
@@ -228,11 +251,17 @@ export function getPrinterOutputSettings(): PrinterOutputSettings {
 export function setPrinterOutputSettings(settings: PrinterOutputSettings): void {
   try {
     // Use explicit checks to preserve 0 and false values
-    const payload: PrinterOutputSettings = {
+    const payload: Required<PrinterOutputSettings> = {
       threshold: settings.threshold !== undefined ? settings.threshold : DEFAULT_PRINTER_OUTPUT.threshold,
       gamma: settings.gamma !== undefined ? settings.gamma : DEFAULT_PRINTER_OUTPUT.gamma,
       dithering: settings.dithering !== undefined ? settings.dithering : DEFAULT_PRINTER_OUTPUT.dithering,
-      sharpen: settings.sharpen !== undefined ? settings.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen
+      sharpen: settings.sharpen !== undefined ? settings.sharpen : DEFAULT_PRINTER_OUTPUT.sharpen,
+      // New fields
+      captureGrayscale: settings.captureGrayscale !== undefined ? settings.captureGrayscale : DEFAULT_PRINTER_OUTPUT.captureGrayscale,
+      previewGrayscale: settings.previewGrayscale !== undefined ? settings.previewGrayscale : DEFAULT_PRINTER_OUTPUT.previewGrayscale,
+      previewDither: settings.previewDither !== undefined ? settings.previewDither : DEFAULT_PRINTER_OUTPUT.previewDither,
+      compositionDither: settings.compositionDither !== undefined ? settings.compositionDither : DEFAULT_PRINTER_OUTPUT.compositionDither,
+      compositionDitherThreshold: settings.compositionDitherThreshold !== undefined ? settings.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold
     };
     localStorage.setItem('morobooth_printer_output_settings', JSON.stringify(payload));
     console.log('Printer output settings saved:', payload);

@@ -1556,6 +1556,129 @@ export const AdminPage = () => {
                     </label>
                   </div>
 
+                  {/* Visual Separator */}
+                  <div className="settings-separator"></div>
+
+                  {/* Capture Stage Filters */}
+                  <div className="filter-section">
+                    <h3>Capture Stage Filters</h3>
+                    <div className="setting-group">
+                      <label className="field-label toggle-label">
+                        <span>Enable Grayscale</span>
+                        <span className="setting-help">(Convert captured photos to grayscale)</span>
+                        <div 
+                          className={`toggle-switch ${printerOutputSettings.captureGrayscale !== false ? 'active' : ''}`}
+                          onClick={() => setPrinterOutputSettingsState({
+                            ...printerOutputSettings,
+                            captureGrayscale: !(printerOutputSettings.captureGrayscale !== false)
+                          })}
+                        >
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </label>
+                      <p className="setting-help note-text">
+                        Note: Changes apply to new captures only. Already captured photos won't be affected.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual Separator */}
+                  <div className="settings-separator"></div>
+
+                  {/* Preview Stage Filters */}
+                  <div className="filter-section">
+                    <h3>Preview Stage Filters</h3>
+                    <div className="setting-group">
+                      <label className="field-label toggle-label">
+                        <span>Enable Grayscale</span>
+                        <span className="setting-help">(Convert preview to grayscale)</span>
+                        <div 
+                          className={`toggle-switch ${printerOutputSettings.previewGrayscale !== false ? 'active' : ''}`}
+                          onClick={() => setPrinterOutputSettingsState({
+                            ...printerOutputSettings,
+                            previewGrayscale: !(printerOutputSettings.previewGrayscale !== false)
+                          })}
+                        >
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </label>
+                    </div>
+                    <div className="setting-group">
+                      <label className="field-label toggle-label">
+                        <span>Enable Ordered Dither</span>
+                        <span className="setting-help">(Bayer dithering for preview)</span>
+                        <div 
+                          className={`toggle-switch ${printerOutputSettings.previewDither !== false ? 'active' : ''}`}
+                          onClick={() => setPrinterOutputSettingsState({
+                            ...printerOutputSettings,
+                            previewDither: !(printerOutputSettings.previewDither !== false)
+                          })}
+                        >
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </label>
+                      <p className="setting-help note-text">
+                        Preview dither runs every 2 frames for performance. Changes apply immediately.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual Separator */}
+                  <div className="settings-separator"></div>
+
+                  {/* Composition Stage Filters */}
+                  <div className="filter-section">
+                    <h3>Composition Stage Filters</h3>
+                    <div className="setting-group">
+                      <label className="field-label toggle-label">
+                        <span>Enable Floyd-Steinberg Dither</span>
+                        <span className="setting-help">(High-quality dithering for final composition)</span>
+                        <div 
+                          className={`toggle-switch ${printerOutputSettings.compositionDither !== false ? 'active' : ''}`}
+                          onClick={() => setPrinterOutputSettingsState({
+                            ...printerOutputSettings,
+                            compositionDither: !(printerOutputSettings.compositionDither !== false)
+                          })}
+                        >
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </label>
+                    </div>
+                    {printerOutputSettings.compositionDither !== false && (
+                      <div className="setting-group">
+                        <label className="field-label">
+                          Dither Threshold: {printerOutputSettings.compositionDitherThreshold ?? 128}
+                          <span className="setting-help">(0-255, lower = more black, higher = more white)</span>
+                        </label>
+                        <input
+                          type="range"
+                          min="0"
+                          max="255"
+                          step="1"
+                          value={printerOutputSettings.compositionDitherThreshold ?? 128}
+                          onChange={(e) => {
+                            const value = Math.max(0, Math.min(255, parseInt(e.target.value) || 128));
+                            setPrinterOutputSettingsState({
+                              ...printerOutputSettings,
+                              compositionDitherThreshold: value
+                            });
+                          }}
+                          className="slider-input"
+                        />
+                        <div className="slider-labels">
+                          <span>More Black</span>
+                          <span>More White</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Visual Separator */}
+                  <div className="settings-separator"></div>
+
+                  {/* Print Stage Filters Header */}
+                  <h3 className="filter-section-title">Print Stage Filters</h3>
+
                   <div className="printer-output-actions">
                     <button
                       onClick={() => {
@@ -1580,7 +1703,12 @@ export const AdminPage = () => {
                           threshold: 165,
                           gamma: 1.25,
                           dithering: true,
-                          sharpen: 0.45
+                          sharpen: 0.45,
+                          captureGrayscale: true,
+                          previewGrayscale: true,
+                          previewDither: true,
+                          compositionDither: true,
+                          compositionDitherThreshold: 128
                         };
                         setPrinterOutputSettingsState(defaults);
                         resetPrinterOutputSettings();

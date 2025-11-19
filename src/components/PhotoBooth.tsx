@@ -3,6 +3,7 @@ import { useRef, forwardRef, useImperativeHandle, useEffect } from 'react';
 import Sketch from 'react-p5';
 import { orderedDither } from '../utils/dithering';
 import { useAudio } from '../hooks/useAudio';
+import { getPrinterOutputSettings } from '../services/configService';
 export type AppState = 'PREVIEW' | 'COUNTDOWN' | 'CAPTURING' | 'REVIEW' | 'COMPOSING';
 
 interface Template {
@@ -213,12 +214,23 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       
       // 1. Draw video to buffer
       pgPreview.image(video, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
-      // 2. Grayscale
-      pgPreview.filter(p.GRAY);
+      
+      // 2. Grayscale based on settings
+      const settings = getPrinterOutputSettings();
+      if (settings.previewGrayscale !== false) {
+        pgPreview.filter(p.GRAY);
+      }
+      
       // 3. Bayer dithering for fast preview (only every few frames for performance)
-      if (p.frameCount % 2 === 0) { // Only dither every other frame
+      if (settings.previewDither !== false && p.frameCount % 2 === 0) { // Only dither every other frame
         orderedDither(pgPreview);
       }
+      
+      // Warning for inconsistent settings (only log once per frame cycle)
+      if (p.frameCount % 60 === 0 && settings.previewDither === false && settings.compositionDither !== false) {
+        console.warn('Preview dither disabled but composition dither enabled - preview may not match final output');
+      }
+      
       // 4. Display buffer to main canvas
       p.image(pgPreview, 0, 0, p.width, p.height);
 
@@ -345,8 +357,11 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
           PREVIEW_HEIGHT
         );
         
-        // Convert to grayscale
-        rawShot.filter(p.GRAY);
+        // Convert to grayscale based on settings
+        const settings = getPrinterOutputSettings();
+        if (settings.captureGrayscale !== false) {
+          rawShot.filter(p.GRAY);
+        }
         
         framesRef.current.push(rawShot);
         lastShotAtRef.current = p.millis();

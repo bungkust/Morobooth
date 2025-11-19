@@ -1,5 +1,6 @@
 import { floydSteinbergDither } from './dithering';
 import { loadConfig } from './config';
+import { getPrinterOutputSettings } from '../services/configService';
 
 interface Template {
   id: string;
@@ -71,13 +72,25 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
   const out = p.createGraphics(W, H);
   out.background(255); // Latar putih
   
+  // Get composition settings
+  const settings = getPrinterOutputSettings();
+  
   for (let i = 0; i < template.photoCount; i++) {
     const pos = photoPositions[i];
     
-    // Terapkan dither kualitas tinggi (Floyd-Steinberg)
-    console.log(`Applying FS dither to frame ${i}...`);
-    const ditheredFrame = floydSteinbergDither(p, frames[i]);
-    console.log(`Dither complete for frame ${i}.`);
+    // Apply dithering based on settings
+    let ditheredFrame: any;
+    if (settings.compositionDither !== false) {
+      // Validate and clamp threshold
+      const threshold = Math.max(0, Math.min(255, settings.compositionDitherThreshold ?? 128));
+      console.log(`Applying FS dither to frame ${i} with threshold ${threshold}...`);
+      ditheredFrame = floydSteinbergDither(p, frames[i], threshold);
+      console.log(`Dither complete for frame ${i}.`);
+    } else {
+      // Skip dithering, use original frame
+      console.log(`Skipping dither for frame ${i} (disabled in settings)`);
+      ditheredFrame = frames[i];
+    }
 
     if (template.layout === 'horizontal') {
       const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
@@ -124,6 +137,13 @@ export async function composeResult(p: any, frames: any[], template: Template, q
     headerImage = await loadImageSafe(p, config.header.imageUrl);
     if (!headerImage) {
       console.warn('Failed to load header image, falling back to text');
+    } else {
+      // Apply grayscale filter to header image based on settings
+      const settings = getPrinterOutputSettings();
+      if (settings.captureGrayscale !== false) {
+        headerImage.filter(p.GRAY);
+        console.log('Applied grayscale filter to header image');
+      }
     }
   }
   const hasHeaderText = config.header.mode === 'text' && !!((config.header.mainText && config.header.mainText.trim()) || (config.header.subText && config.header.subText.trim()));
@@ -267,13 +287,25 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   const dateY = margin + headerH + 40; // Below header with spacing
   out.text(dateText, W / 2, dateY);
   
+  // Get composition settings
+  const settings = getPrinterOutputSettings();
+  
   for (let i = 0; i < template.photoCount; i++) {
     const pos = photoPositions[i];
     
-    // Terapkan dither kualitas tinggi (Floyd-Steinberg)
-    console.log(`Applying FS dither to frame ${i}...`);
-    const ditheredFrame = floydSteinbergDither(p, frames[i]);
-    console.log(`Dither complete for frame ${i}.`);
+    // Apply dithering based on settings
+    let ditheredFrame: any;
+    if (settings.compositionDither !== false) {
+      // Validate and clamp threshold
+      const threshold = Math.max(0, Math.min(255, settings.compositionDitherThreshold ?? 128));
+      console.log(`Applying FS dither to frame ${i} with threshold ${threshold}...`);
+      ditheredFrame = floydSteinbergDither(p, frames[i], threshold);
+      console.log(`Dither complete for frame ${i}.`);
+    } else {
+      // Skip dithering, use original frame
+      console.log(`Skipping dither for frame ${i} (disabled in settings)`);
+      ditheredFrame = frames[i];
+    }
 
     if (template.layout === 'horizontal') {
       const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
