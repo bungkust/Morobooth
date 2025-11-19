@@ -1,7 +1,7 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
 import { createStreetCoffeeReceipt } from './receiptTemplates';
-import { DEFAULT_PRINTER_OUTPUT } from './configService';
+import { DEFAULT_PRINTER_OUTPUT, getPrinterOutputSettings } from './configService';
 
 interface PrinterInfo {
   name: string;
@@ -165,31 +165,23 @@ export class HybridBluetoothPrinterService {
   ): Promise<{ base64: string; width: number; height: number }> {
     const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
     
-    // Load custom printer output settings from localStorage if available
-    let customSettings: { threshold?: number; gamma?: number; dithering?: boolean; sharpen?: number } | null = null;
-    try {
-      const stored = localStorage.getItem('morobooth_printer_output_settings');
-      if (stored) {
-        customSettings = JSON.parse(stored);
-        console.log('Native printer: Using custom settings:', customSettings);
-      }
-    } catch (error) {
-      console.warn('Native printer: Failed to load custom settings:', error);
-    }
+    // Load printer output settings from configService (consistent with AdminPage)
+    const customSettings = getPrinterOutputSettings();
+    console.log('Native printer: Using settings from configService:', customSettings);
     
     // Get settings with defaults
     // Use explicit checks to preserve 0 and false values
     // Use DEFAULT_PRINTER_OUTPUT from configService for consistency
-    const threshold = customSettings?.threshold !== undefined 
+    const threshold = customSettings.threshold !== undefined 
       ? customSettings.threshold 
       : DEFAULT_PRINTER_OUTPUT.threshold!;
-    const gamma = customSettings?.gamma !== undefined 
+    const gamma = customSettings.gamma !== undefined 
       ? customSettings.gamma 
       : DEFAULT_PRINTER_OUTPUT.gamma!;
-    const applyDithering = customSettings?.dithering !== undefined 
+    const applyDithering = customSettings.dithering !== undefined 
       ? customSettings.dithering 
       : DEFAULT_PRINTER_OUTPUT.dithering!;
-    const sharpenAmount = customSettings?.sharpen !== undefined 
+    const sharpenAmount = customSettings.sharpen !== undefined 
       ? customSettings.sharpen 
       : DEFAULT_PRINTER_OUTPUT.sharpen!;
     
@@ -279,7 +271,7 @@ export class HybridBluetoothPrinterService {
               gamma,
               sharpen: sharpenAmount,
               dithering: applyDithering,
-              usingCustomSettings: customSettings !== null
+              usingCustomSettings: true
             });
             
             // Enhanced debug logging for chunking

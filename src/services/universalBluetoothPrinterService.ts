@@ -1,5 +1,7 @@
 /// <reference types="@types/web-bluetooth" />
 
+import { getPrinterOutputSettings } from './configService';
+
 export interface PrinterConfig {
   name: string;
   width: number; // printable pixel width (58mm -> ~384px, 80mm -> ~576px)
@@ -258,17 +260,9 @@ export class UniversalBluetoothPrinterService {
   private async convertToThermalFormat(imageDataURL: string, config: PrinterConfig): Promise<string> {
     const IMAGE_LOAD_TIMEOUT = 10000; // 10 seconds timeout
     
-    // Load custom printer output settings from localStorage if available
-    let customSettings: { threshold?: number; gamma?: number; dithering?: boolean; sharpen?: number } | null = null;
-    try {
-      const stored = localStorage.getItem('morobooth_printer_output_settings');
-      if (stored) {
-        customSettings = JSON.parse(stored);
-        console.log('Web Bluetooth printer: Using custom settings:', customSettings);
-      }
-    } catch (error) {
-      console.warn('Web Bluetooth printer: Failed to load custom settings:', error);
-    }
+    // Load printer output settings from configService (consistent with AdminPage)
+    const customSettings = getPrinterOutputSettings();
+    console.log('Web Bluetooth printer: Using settings from configService:', customSettings);
     
     return Promise.race<string>([
       new Promise<string>((resolve, reject) => {
@@ -297,9 +291,9 @@ export class UniversalBluetoothPrinterService {
             ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
             const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
 
-            // Use custom settings if available, otherwise fall back to config
+            // Use settings from configService, fall back to config if not set
             // Use explicit checks to preserve 0 and false values
-            const sharpenAmount = customSettings?.sharpen !== undefined 
+            const sharpenAmount = customSettings.sharpen !== undefined 
               ? customSettings.sharpen 
               : (config.sharpen ?? 0);
             if (sharpenAmount > 0) {
@@ -310,13 +304,13 @@ export class UniversalBluetoothPrinterService {
             const data = imageData.data;
             let blackCount = 0;
             let whiteCount = 0;
-            const threshold = customSettings?.threshold !== undefined 
+            const threshold = customSettings.threshold !== undefined 
               ? customSettings.threshold 
               : (config.threshold ?? 150);
-            const gamma = customSettings?.gamma !== undefined 
+            const gamma = customSettings.gamma !== undefined 
               ? customSettings.gamma 
               : (config.gamma ?? 1);
-            const applyDithering = customSettings?.dithering !== undefined 
+            const applyDithering = customSettings.dithering !== undefined 
               ? customSettings.dithering 
               : (config.dithering ?? false);
 
@@ -375,7 +369,7 @@ export class UniversalBluetoothPrinterService {
               gamma,
               sharpen: sharpenAmount,
               dithering: applyDithering,
-              usingCustomSettings: customSettings !== null
+              usingCustomSettings: true
             });
             
             const bitmap = this.imageDataToEscPosBitmap(imageData);
