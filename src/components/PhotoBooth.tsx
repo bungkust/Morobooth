@@ -401,48 +401,90 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
     console.log('Template:', template);
     
     // Import both compose functions dynamically to avoid circular dependency
-    import('../utils/photoComposer').then(async ({ composeResultForReview, composeResult: composeResultHighRes }) => {
-      try {
-        console.log('Starting review composite...');
-        // Create review version (smaller, for display)
-        const compositeReview = await composeResultForReview(p, framesRef.current, template);
-        finalCompositeRef.current = compositeReview;
-        onFinalCompositeUpdate(compositeReview);
-        console.log('Review composite complete');
-
-        console.log('Starting high-res composite...');
-        // Create high-res version (for download/print)
-        const compositeHighRes = await composeResultHighRes(p, framesRef.current, template);
-        finalCompositeHighResRef.current = compositeHighRes;
-        console.log('High-res composite complete');
-
-        // Note: Photo will be saved when user clicks print button
-        // Reset photoId ref (will be set when saved)
-        currentPhotoIdRef.current = null;
-
-        // Switch to REVIEW state
-        console.log('Switching to REVIEW state...');
-        onStateChange('REVIEW');
-        onCountdownTextUpdate('');
-        
-        // Keep canvas size fixed for review mode (same as preview)
-        p.resizeCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-        onCanvasResize(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-        onCanvasModeChange(true);
-        
-        console.log('Composing complete. Ready for review.');
-      } catch (error) {
-        console.error('Error during composition:', error);
-        // Fallback: switch to REVIEW state even if composition fails
-        onStateChange('REVIEW');
-        onCountdownTextUpdate('');
+    // Add retry mechanism for dynamic import
+    const importWithRetry = async (retries = 3, delay = 500): Promise<any> => {
+      for (let i = 0; i < retries; i++) {
+        try {
+          console.log(`[COMPOSE] Attempting to import photoComposer (attempt ${i + 1}/${retries})`);
+          const module = await import('../utils/photoComposer');
+          console.log('[COMPOSE] ✓ photoComposer imported successfully');
+          return module;
+        } catch (error) {
+          console.error(`[COMPOSE] Import attempt ${i + 1} failed:`, error);
+          if (i < retries - 1) {
+            console.log(`[COMPOSE] Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            throw error;
+          }
+        }
       }
-    }).catch((error) => {
-      console.error('Failed to import photoComposer:', error);
-      // Fallback: switch to REVIEW state even if import fails
-      onStateChange('REVIEW');
-      onCountdownTextUpdate('');
-    });
+    };
+
+    importWithRetry()
+      .then(async ({ composeResultForReview, composeResult: composeResultHighRes }) => {
+        try {
+          console.log('[COMPOSE] Starting review composite...');
+          // Create review version (smaller, for display)
+          const compositeReview = await composeResultForReview(p, framesRef.current, template);
+          finalCompositeRef.current = compositeReview;
+          onFinalCompositeUpdate(compositeReview);
+          console.log('[COMPOSE] ✓ Review composite complete');
+
+          console.log('[COMPOSE] Starting high-res composite...');
+          // Create high-res version (for download/print)
+          const compositeHighRes = await composeResultHighRes(p, framesRef.current, template);
+          finalCompositeHighResRef.current = compositeHighRes;
+          console.log('[COMPOSE] ✓ High-res composite complete');
+
+          // Note: Photo will be saved when user clicks print button
+          // Reset photoId ref (will be set when saved)
+          currentPhotoIdRef.current = null;
+
+          // Switch to REVIEW state
+          console.log('[COMPOSE] Switching to REVIEW state...');
+          onStateChange('REVIEW');
+          onCountdownTextUpdate('');
+          
+          // Keep canvas size fixed for review mode (same as preview)
+          p.resizeCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          onCanvasResize(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          onCanvasModeChange(true);
+          
+          console.log('[COMPOSE] ✓ Composing complete. Ready for review.');
+        } catch (error) {
+          console.error('[COMPOSE] ERROR: Error during composition:', error);
+          if (error instanceof Error) {
+            console.error('[COMPOSE] Error name:', error.name);
+            console.error('[COMPOSE] Error message:', error.message);
+            console.error('[COMPOSE] Error stack:', error.stack);
+          }
+          // Fallback: switch to REVIEW state even if composition fails
+          onStateChange('REVIEW');
+          onCountdownTextUpdate('');
+        }
+      })
+      .catch((error) => {
+        console.error('[COMPOSE] ERROR: Failed to import photoComposer after retries');
+        console.error('[COMPOSE] Error type:', typeof error);
+        if (error instanceof Error) {
+          console.error('[COMPOSE] Error name:', error.name);
+          console.error('[COMPOSE] Error message:', error.message);
+          console.error('[COMPOSE] Error stack:', error.stack);
+        } else {
+          console.error('[COMPOSE] Error value:', String(error));
+        }
+        
+        // Check if it's a network/connection error
+        if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+          console.error('[COMPOSE] Network error detected - Vite dev server may be disconnected');
+          console.error('[COMPOSE] This usually happens when dev server connection is lost');
+        }
+        
+        // Fallback: switch to REVIEW state even if import fails
+        onStateChange('REVIEW');
+        onCountdownTextUpdate('');
+      });
   };
 
 

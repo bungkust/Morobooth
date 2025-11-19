@@ -125,22 +125,22 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
       throw new Error('Failed to increment photo count. Please try again.');
     }
     
-    const paddedNumber = String(photoNumber).padStart(3, '0');
-    const photoId = `${session.sessionCode}-${paddedNumber}`;
+  const paddedNumber = String(photoNumber).padStart(3, '0');
+  const photoId = `${session.sessionCode}-${paddedNumber}`;
     console.log('[SAVE_PHOTO] Step 4: Creating photo record');
     console.log('[SAVE_PHOTO] Photo ID:', photoId);
     console.log('[SAVE_PHOTO] Photo number:', photoNumber);
     console.log('[SAVE_PHOTO] Session code:', session.sessionCode);
-    
-    const record: PhotoRecord = {
-      id: photoId,
-      sessionCode: session.sessionCode,
-      photoNumber,
-      imageDataURL,
-      timestamp: new Date().toISOString(),
-      uploaded: false
-    };
-    
+  
+  const record: PhotoRecord = {
+    id: photoId,
+    sessionCode: session.sessionCode,
+    photoNumber,
+    imageDataURL,
+    timestamp: new Date().toISOString(),
+    uploaded: false
+  };
+  
     // Check data size (approximate)
     const dataSize = imageDataURL.length;
     const dataSizeKB = Math.round(dataSize / 1024);
@@ -151,7 +151,7 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
     console.log('[SAVE_PHOTO] Database name:', DB_NAME);
     console.log('[SAVE_PHOTO] Store name:', PHOTO_STORE);
     try {
-      const db = await getDB();
+  const db = await getDB();
       console.log('[SAVE_PHOTO] ✓ Database connection opened');
       console.log('[SAVE_PHOTO] Attempting to save record:', {
         id: record.id,
@@ -162,7 +162,7 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
         imageDataSize: record.imageDataURL.length
       });
       
-      await db.put(PHOTO_STORE, record);
+  await db.put(PHOTO_STORE, record);
       console.log('[SAVE_PHOTO] ✓ Photo saved successfully to IndexedDB');
       console.log('[SAVE_PHOTO] Photo ID:', photoId);
       console.log('[SAVE_PHOTO] SUCCESS: savePhotoLocally completed');
@@ -194,8 +194,8 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
       
       throw new Error(`Failed to save to database: ${dbError.message || dbError.name || 'Unknown error'}`);
     }
-    
-    return record;
+  
+  return record;
   } catch (error) {
     console.error('[SAVE_PHOTO] ERROR: savePhotoLocally failed');
     console.error('[SAVE_PHOTO] Error type:', typeof error);
