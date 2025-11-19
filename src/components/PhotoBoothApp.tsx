@@ -73,24 +73,64 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     // Use provided photoId or get from ref
     const currentPhotoId = photoId || photoBoothRef.current.getPhotoIdForPrint();
     
+    // Validate photoId format
+    if (currentPhotoId && (!currentPhotoId.includes('-') || currentPhotoId.split('-').length !== 2)) {
+      console.error('Invalid photoId format:', currentPhotoId);
+      // Fallback to high-res without QR
+      return photoBoothRef.current.getFinalCompositeDataURL();
+    }
+    
     if (currentPhotoId) {
-      const downloadURL = getDownloadURL(currentPhotoId);
-      const qrCodeDataURL = await generateQRCodeDataURL(downloadURL);
-      if (qrCodeDataURL) {
-        const { composeResult } = await import('../utils/photoComposer');
-        const p5Instance = photoBoothRef.current.getP5Instance?.();
-        const frames = photoBoothRef.current.getFrames?.();
-        if (p5Instance && frames) {
-          const printComposite = await composeResult(
-            p5Instance,
-            frames,
-            template,
-            qrCodeDataURL
-          );
-          dataURL = printComposite.canvas.toDataURL('image/png');
+      try {
+        const downloadURL = getDownloadURL(currentPhotoId);
+        
+        if (!downloadURL) {
+          console.error('Failed to generate download URL for photoId:', currentPhotoId);
+          // Fallback to high-res without QR
+          return photoBoothRef.current.getFinalCompositeDataURL();
         }
+        
+        // Load QR settings from configService
+        const { getQRCodeSettings } = await import('../services/configService');
+        const qrSettings = getQRCodeSettings();
+        
+        // Check if QR code is enabled
+        if (qrSettings.enabled === false) {
+          console.log('QR code is disabled in settings, printing without QR code');
+          // Fallback to high-res without QR
+          return photoBoothRef.current.getFinalCompositeDataURL();
+        }
+        
+        const qrCodeDataURL = await generateQRCodeDataURL(downloadURL, qrSettings);
+        
+        if (qrCodeDataURL) {
+          const { composeResult } = await import('../utils/photoComposer');
+          const p5Instance = photoBoothRef.current.getP5Instance?.();
+          const frames = photoBoothRef.current.getFrames?.();
+          
+          if (p5Instance && frames) {
+            const printComposite = await composeResult(
+              p5Instance,
+              frames,
+              template,
+              qrCodeDataURL
+            );
+            dataURL = printComposite.canvas.toDataURL('image/png');
+          } else {
+            console.warn('P5 instance or frames not available for QR composition');
+          }
+        } else {
+          console.warn('QR code generation failed, falling back to high-res without QR');
+        }
+      } catch (error) {
+        console.error('Error composing image with QR code:', error);
+        if (error instanceof Error) {
+          console.error('Error details:', error.message, error.stack);
+        }
+        // Fallback to high-res without QR
       }
     }
+    
     if (!dataURL) {
       dataURL = photoBoothRef.current.getFinalCompositeDataURL();
     }

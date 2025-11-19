@@ -249,3 +249,71 @@ export function resetPrinterOutputSettings(): void {
     console.error('Failed to reset printer output settings:', error);
   }
 }
+
+// QR Code Settings
+export interface QRCodeSettings {
+  enabled?: boolean; // Show QR code on print
+  width?: number; // 100-400px
+  margin?: number; // 0-4
+  errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  colorDark?: string; // Hex color
+  colorLight?: string; // Hex color
+}
+
+export const DEFAULT_QR_SETTINGS: Required<QRCodeSettings> = {
+  enabled: true, // Default: QR code enabled
+  width: 200,
+  margin: 1,
+  errorCorrectionLevel: 'M',
+  colorDark: '#000000',
+  colorLight: '#FFFFFF'
+};
+
+export function getQRCodeSettings(): QRCodeSettings {
+  try {
+    const stored = localStorage.getItem('morobooth_qr_settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Use explicit checks to preserve 0 and false values
+      return {
+        enabled: parsed.enabled !== undefined ? parsed.enabled : DEFAULT_QR_SETTINGS.enabled,
+        width: parsed.width !== undefined ? parsed.width : DEFAULT_QR_SETTINGS.width,
+        margin: parsed.margin !== undefined ? parsed.margin : DEFAULT_QR_SETTINGS.margin,
+        errorCorrectionLevel: parsed.errorCorrectionLevel !== undefined ? parsed.errorCorrectionLevel : DEFAULT_QR_SETTINGS.errorCorrectionLevel,
+        colorDark: parsed.colorDark !== undefined ? parsed.colorDark : DEFAULT_QR_SETTINGS.colorDark,
+        colorLight: parsed.colorLight !== undefined ? parsed.colorLight : DEFAULT_QR_SETTINGS.colorLight
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to parse QR code settings:', error);
+  }
+  
+  return { ...DEFAULT_QR_SETTINGS };
+}
+
+export function setQRCodeSettings(settings: QRCodeSettings): void {
+  try {
+    // Use explicit checks to preserve 0 and false values
+    const payload: Required<QRCodeSettings> = {
+      enabled: settings.enabled !== undefined ? settings.enabled : DEFAULT_QR_SETTINGS.enabled,
+      width: settings.width !== undefined ? settings.width : DEFAULT_QR_SETTINGS.width,
+      margin: settings.margin !== undefined ? settings.margin : DEFAULT_QR_SETTINGS.margin,
+      errorCorrectionLevel: settings.errorCorrectionLevel !== undefined ? settings.errorCorrectionLevel : DEFAULT_QR_SETTINGS.errorCorrectionLevel,
+      colorDark: settings.colorDark !== undefined ? settings.colorDark : DEFAULT_QR_SETTINGS.colorDark,
+      colorLight: settings.colorLight !== undefined ? settings.colorLight : DEFAULT_QR_SETTINGS.colorLight
+    };
+    localStorage.setItem('morobooth_qr_settings', JSON.stringify(payload));
+    console.log('QR code settings saved:', payload);
+  } catch (error) {
+    console.error('Failed to save QR code settings:', error);
+    throw new Error('Failed to save QR code settings');
+  }
+}
+
+export function resetQRCodeSettings(): void {
+  try {
+    localStorage.removeItem('morobooth_qr_settings');
+  } catch (error) {
+    console.error('Failed to reset QR code settings:', error);
+  }
+}

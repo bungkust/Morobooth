@@ -16,8 +16,8 @@ import {
 import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
 import { bulkUploadPhotos, type UploadResult } from '../services/uploadService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings } from '../services/configService';
-import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings } from '../services/configService';
+import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings } from '../services/configService';
+import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS } from '../services/configService';
 import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
@@ -201,6 +201,16 @@ export const AdminPage = () => {
     sharpen: 0.45
   });
 
+  // QR code settings
+  const [qrCodeSettings, setQrCodeSettingsState] = useState<QRCodeSettings>({
+    width: 200,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+    colorDark: '#000000',
+    colorLight: '#FFFFFF'
+  });
+  const [qrPreviewUrl, setQrPreviewUrl] = useState<string>('');
+
   // Helper untuk show notification (ganti alert)
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -259,8 +269,32 @@ export const AdminPage = () => {
       // Load printer output settings
       const savedSettings = getPrinterOutputSettings();
       setPrinterOutputSettingsState(savedSettings);
+      // Load QR code settings
+      const savedQrSettings = getQRCodeSettings();
+      setQrCodeSettingsState(savedQrSettings);
+      // Generate preview QR code
+      generateQRPreview(savedQrSettings);
     }
   }, [authenticated, loadData]);
+
+  // Generate QR preview
+  const generateQRPreview = async (settings?: QRCodeSettings) => {
+    try {
+      const currentSettings = settings || qrCodeSettings;
+      // Only generate preview if QR is enabled
+      if (currentSettings.enabled === false) {
+        setQrPreviewUrl('');
+        return;
+      }
+      const { generateQRCodeDataURL } = await import('../utils/qrCodeGenerator');
+      const testUrl = 'https://morobooth.com/download/TEST-001';
+      const preview = await generateQRCodeDataURL(testUrl, currentSettings);
+      setQrPreviewUrl(preview);
+    } catch (error) {
+      console.error('Failed to generate QR preview:', error);
+      setQrPreviewUrl('');
+    }
+  };
 
   // Initialize native bridge
   useEffect(() => {
@@ -508,17 +542,43 @@ export const AdminPage = () => {
     try {
       const results = await bulkUploadPhotos(unuploadedPhotos);
       
-      // Mark successful uploads
+      // Mark successful uploads with supabasePath
+      let successCount = 0;
+      let failCount = 0;
+      
       for (const result of results) {
         if (result.success && result.url) {
-          await markPhotoAsUploaded(result.photoId, result.url);
+          try {
+            // Save supabasePath if available
+            await markPhotoAsUploaded(result.photoId, result.url, result.path);
+            successCount++;
+          } catch (markError) {
+            // Log error but don't break the flow
+            console.error(`Failed to mark photo ${result.photoId} as uploaded:`, markError);
+            failCount++;
+            // Still count as success for upload, but mark failed for notification
+          }
+        } else {
+          failCount++;
         }
       }
       
       setUploadResults(results);
       await loadData(); // Refresh unuploaded list
+      
+      // Show success notification with count
+      if (successCount > 0) {
+        showNotification(
+          `✓ ${successCount} photos uploaded successfully${failCount > 0 ? `, ${failCount} failed` : ''}`,
+          failCount > 0 ? 'info' : 'success'
+        );
+      } else {
+        showNotification('All uploads failed. Please check your connection.', 'error');
+      }
     } catch (err) {
-      setError('Upload failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      setError('Upload failed: ' + errorMessage);
+      showNotification('Upload failed: ' + errorMessage, 'error');
     } finally {
       setUploading(false);
     }
@@ -884,6 +944,235 @@ export const AdminPage = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* QR Code Settings Section */}
+              <div className="admin-card" style={{ marginTop: '20px' }}>
+                <div className="card-header">
+                  <h2>QR Code Settings</h2>
+                </div>
+                <div className="qr-settings">
+                  <p className="settings-description">
+                    Adjust QR code appearance for printed photos. Changes will be applied to all future prints.
+                  </p>
+                  
+                  {/* Enable/Disable QR Code Toggle */}
+                  <div className="setting-group" style={{ marginBottom: '24px', paddingBottom: '24px', borderBottom: '2px solid #e0e0e0' }}>
+                    <label className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={qrCodeSettings.enabled !== false}
+                        onChange={(e) => {
+                          const newSettings = {
+                            ...qrCodeSettings,
+                            enabled: e.target.checked
+                          };
+                          setQrCodeSettingsState(newSettings);
+                          if (e.target.checked) {
+                            generateQRPreview(newSettings);
+                          } else {
+                            setQrPreviewUrl('');
+                          }
+                        }}
+                        style={{ width: '24px', height: '24px', cursor: 'pointer' }}
+                      />
+                      <span style={{ fontSize: '18px', fontWeight: '600' }}>
+                        Show QR Code on Print
+                      </span>
+                    </label>
+                    <p className="setting-help" style={{ marginLeft: '36px', marginTop: '4px' }}>
+                      {qrCodeSettings.enabled !== false 
+                        ? 'QR code will be printed on photos. Users can scan to download their photos.'
+                        : 'QR code will NOT be printed. Photos will be printed without QR code.'}
+                    </p>
+                  </div>
+                  
+                  {/* Conditional rendering: Only show other settings if QR is enabled */}
+                  {qrCodeSettings.enabled !== false && (
+                    <>
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Width: {qrCodeSettings.width ?? DEFAULT_QR_SETTINGS.width}px
+                      <span className="setting-help">(100-400px, larger = easier to scan)</span>
+                    </label>
+                    <input
+                      type="range"
+                      min="100"
+                      max="400"
+                      step="10"
+                      value={qrCodeSettings.width ?? DEFAULT_QR_SETTINGS.width}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...qrCodeSettings,
+                          width: parseInt(e.target.value)
+                        };
+                        setQrCodeSettingsState(newSettings);
+                        generateQRPreview(newSettings);
+                      }}
+                      className="slider-input"
+                    />
+                    <div className="slider-labels">
+                      <span>Smaller</span>
+                      <span>Larger</span>
+                    </div>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Margin: {qrCodeSettings.margin ?? DEFAULT_QR_SETTINGS.margin}
+                      <span className="setting-help">(0-4, white border around QR code)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="4"
+                      value={qrCodeSettings.margin ?? DEFAULT_QR_SETTINGS.margin}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        if (!isNaN(value) && value >= 0 && value <= 4) {
+                          const newSettings = {
+                            ...qrCodeSettings,
+                            margin: value
+                          };
+                          setQrCodeSettingsState(newSettings);
+                          generateQRPreview(newSettings);
+                        }
+                      }}
+                      className="number-input"
+                      style={{ width: '100px', padding: '8px', fontSize: '16px' }}
+                    />
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Error Correction Level
+                      <span className="setting-help">(Higher = more damage tolerance, but larger QR code)</span>
+                    </label>
+                    <select
+                      value={qrCodeSettings.errorCorrectionLevel ?? DEFAULT_QR_SETTINGS.errorCorrectionLevel}
+                      onChange={(e) => {
+                        const newSettings = {
+                          ...qrCodeSettings,
+                          errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H'
+                        };
+                        setQrCodeSettingsState(newSettings);
+                        generateQRPreview(newSettings);
+                      }}
+                      className="select-input"
+                      style={{ width: '100%', padding: '8px', fontSize: '16px' }}
+                    >
+                      <option value="L">L - Low (~7% damage tolerance)</option>
+                      <option value="M">M - Medium (~15% damage tolerance) - Recommended</option>
+                      <option value="Q">Q - Quartile (~25% damage tolerance)</option>
+                      <option value="H">H - High (~30% damage tolerance)</option>
+                    </select>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Dark Color (QR Code)
+                    </label>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <input
+                        type="color"
+                        value={qrCodeSettings.colorDark ?? DEFAULT_QR_SETTINGS.colorDark}
+                        onChange={(e) => {
+                          const newSettings = {
+                            ...qrCodeSettings,
+                            colorDark: e.target.value
+                          };
+                          setQrCodeSettingsState(newSettings);
+                          generateQRPreview(newSettings);
+                        }}
+                        style={{ width: '60px', height: '40px', cursor: 'pointer' }}
+                      />
+                      <span>{qrCodeSettings.colorDark ?? DEFAULT_QR_SETTINGS.colorDark}</span>
+                    </div>
+                  </div>
+
+                  <div className="setting-group">
+                    <label className="field-label">
+                      Light Color (Background)
+                    </label>
+                    <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <input
+                        type="color"
+                        value={qrCodeSettings.colorLight ?? DEFAULT_QR_SETTINGS.colorLight}
+                        onChange={(e) => {
+                          const newSettings = {
+                            ...qrCodeSettings,
+                            colorLight: e.target.value
+                          };
+                          setQrCodeSettingsState(newSettings);
+                          generateQRPreview(newSettings);
+                        }}
+                        style={{ width: '60px', height: '40px', cursor: 'pointer' }}
+                      />
+                      <span>{qrCodeSettings.colorLight ?? DEFAULT_QR_SETTINGS.colorLight}</span>
+                    </div>
+                  </div>
+
+                  {/* QR Preview */}
+                  {qrCodeSettings.enabled !== false && qrPreviewUrl && (
+                    <div className="qr-preview-container" style={{ marginTop: '20px', padding: '16px', background: '#f8f9fa', border: '2px solid var(--c-black)', borderRadius: '8px' }}>
+                      <h3 style={{ marginTop: '0', marginBottom: '12px', fontSize: '16px' }}>Preview</h3>
+                      <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <img 
+                          src={qrPreviewUrl} 
+                          alt="QR Code Preview" 
+                          style={{ 
+                            maxWidth: '200px', 
+                            height: 'auto',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px'
+                          }} 
+                        />
+                        <div style={{ flex: 1, minWidth: '200px' }}>
+                          <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#666' }}>
+                            This is how your QR code will look on printed photos.
+                          </p>
+                          <p style={{ margin: '0', fontSize: '12px', color: '#999' }}>
+                            Test URL: https://morobooth.com/download/TEST-001
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                    </>
+                  )}
+
+                  <div className="qr-settings-actions" style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                    <button
+                      onClick={() => {
+                        try {
+                          setQRCodeSettings(qrCodeSettings);
+                          const saved = getQRCodeSettings();
+                          console.log('QR settings saved successfully:', saved);
+                          showNotification('QR code settings saved! Changes will apply to next print.', 'success');
+                          generateQRPreview(qrCodeSettings);
+                        } catch (error) {
+                          console.error('Failed to save QR settings:', error);
+                          showNotification('Failed to save QR settings. Please try again.', 'error');
+                        }
+                      }}
+                      className="primary-btn"
+                    >
+                      Save Settings
+                    </button>
+                    <button
+                      onClick={() => {
+                        const defaults = { ...DEFAULT_QR_SETTINGS };
+                        setQrCodeSettingsState(defaults);
+                        resetQRCodeSettings();
+                        generateQRPreview(defaults);
+                        showNotification('QR settings reset to defaults', 'info');
+                      }}
+                      className="secondary-btn"
+                    >
+                      Reset to Defaults
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

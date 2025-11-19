@@ -9,19 +9,58 @@ export interface PhotoRecord {
   timestamp: string;
   uploaded: boolean;
   supabaseUrl?: string;
+  supabasePath?: string; // Permanent path in Supabase storage (e.g., "ABC123-001.png")
 }
 
 const DB_NAME = 'morobooth-db';
 const PHOTO_STORE = 'photos';
 
 async function getDB() {
-  return openDB(DB_NAME, 2, {
-    upgrade(db) {
-      // Create photos store
+  return openDB(DB_NAME, 3, {
+    upgrade(db, oldVersion, newVersion, transaction) {
+      // Create photos store if it doesn't exist
       if (!db.objectStoreNames.contains(PHOTO_STORE)) {
         const store = db.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
         store.createIndex('sessionCode', 'sessionCode');
         store.createIndex('uploaded', 'uploaded');
+      } else if (oldVersion < 3) {
+        // Migration from version 2 to 3: add supabasePath field to existing records
+        console.log('Migrating database from version', oldVersion, 'to', newVersion);
+        const store = transaction.objectStore(PHOTO_STORE);
+        
+        // Get all existing photos and add supabasePath field
+        const request = store.openCursor();
+        const updatePromises: Promise<void>[] = [];
+        
+        request.onsuccess = (event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+          if (cursor) {
+            const photo = cursor.value;
+            // Add supabasePath field if it doesn't exist
+            if (photo && !('supabasePath' in photo)) {
+              photo.supabasePath = undefined;
+              updatePromises.push(
+                cursor.update(photo).then(() => {
+                  console.log('Migrated photo:', photo.id);
+                }).catch((err) => {
+                  console.error('Failed to migrate photo:', photo.id, err);
+                })
+              );
+            }
+            cursor.continue();
+          } else {
+            // All records processed
+            Promise.all(updatePromises).then(() => {
+              console.log('Database migration completed');
+            }).catch((err) => {
+              console.error('Migration error:', err);
+            });
+          }
+        };
+        
+        request.onerror = (event) => {
+          console.error('Migration cursor error:', event);
+        };
       }
     }
   });
@@ -61,12 +100,28 @@ export async function getUnuploadedPhotos(): Promise<PhotoRecord[]> {
   return allPhotos.filter(p => !p.uploaded);
 }
 
-export async function markPhotoAsUploaded(id: string, supabaseUrl: string) {
+export async function markPhotoAsUploaded(
+  id: string,
+  supabaseUrl: string,
+  supabasePath?: string
+) {
   const db = await getDB();
   const photo = await db.get(PHOTO_STORE, id);
   if (photo) {
     photo.uploaded = true;
     photo.supabaseUrl = supabaseUrl;
+    if (supabasePath !== undefined) {
+      photo.supabasePath = supabasePath;
+    }
+    await db.put(PHOTO_STORE, photo);
+  }
+}
+
+export async function updatePhotoSupabasePath(id: string, path: string) {
+  const db = await getDB();
+  const photo = await db.get(PHOTO_STORE, id);
+  if (photo) {
+    photo.supabasePath = path;
     await db.put(PHOTO_STORE, photo);
   }
 }
