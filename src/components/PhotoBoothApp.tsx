@@ -310,21 +310,50 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         }
 
         // Save photo to IndexedDB (becomes pending for upload)
-        console.log('Saving photo locally before print...');
+        console.log('[HANDLE_PRINT] Starting to save photo locally before print...');
+        console.log('[HANDLE_PRINT] highResDataURL exists:', !!highResDataURL);
+        console.log('[HANDLE_PRINT] highResDataURL type:', typeof highResDataURL);
+        console.log('[HANDLE_PRINT] highResDataURL length:', highResDataURL?.length || 0);
+        
         const { savePhotoLocally } = await import('../services/photoStorageService');
         let photoRecord;
         try {
+          console.log('[HANDLE_PRINT] Calling savePhotoLocally...');
           photoRecord = await savePhotoLocally(highResDataURL);
           photoId = photoRecord.id;
-          console.log('Photo saved locally:', photoId);
+          console.log('[HANDLE_PRINT] ✓ Photo saved locally successfully');
+          console.log('[HANDLE_PRINT] Photo ID:', photoId);
+          console.log('[HANDLE_PRINT] Photo record:', JSON.stringify({
+            id: photoRecord.id,
+            sessionCode: photoRecord.sessionCode,
+            photoNumber: photoRecord.photoNumber,
+            timestamp: photoRecord.timestamp
+          }));
           
           // Update photoId in PhotoBooth ref so it's available for next print
           if (photoBoothRef.current.setPhotoIdForPrint) {
+            console.log('[HANDLE_PRINT] Updating photoId in PhotoBooth ref');
             photoBoothRef.current.setPhotoIdForPrint(photoId);
           }
         } catch (saveError) {
-          console.error('Failed to save photo locally:', saveError);
-          showNotification('Failed to save photo. Please try again.', 'error');
+          console.error('[HANDLE_PRINT] ERROR: Failed to save photo locally');
+          console.error('[HANDLE_PRINT] Error type:', typeof saveError);
+          if (saveError instanceof Error) {
+            console.error('[HANDLE_PRINT] Error name:', saveError.name);
+            console.error('[HANDLE_PRINT] Error message:', saveError.message);
+            console.error('[HANDLE_PRINT] Error stack:', saveError.stack);
+          } else {
+            console.error('[HANDLE_PRINT] Error value:', String(saveError));
+          }
+          
+          // Show more specific error message
+          let errorMessage = 'Failed to save photo. Please try again.';
+          if (saveError instanceof Error) {
+            errorMessage = saveError.message || errorMessage;
+          }
+          
+          console.error('[HANDLE_PRINT] Showing error notification:', errorMessage);
+          showNotification(errorMessage, 'error');
           return;
         }
       } else {
