@@ -85,7 +85,7 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
       const threshold = Math.max(0, Math.min(255, settings.compositionDitherThreshold ?? 128));
       console.log(`Applying FS dither to frame ${i} with threshold ${threshold}...`);
       ditheredFrame = floydSteinbergDither(p, frames[i], threshold);
-      console.log(`Dither complete for frame ${i}.`);
+    console.log(`Dither complete for frame ${i}.`);
     } else {
       // Skip dithering, use original frame
       console.log(`Skipping dither for frame ${i} (disabled in settings)`);
@@ -300,7 +300,7 @@ export async function composeResult(p: any, frames: any[], template: Template, q
       const threshold = Math.max(0, Math.min(255, settings.compositionDitherThreshold ?? 128));
       console.log(`Applying FS dither to frame ${i} with threshold ${threshold}...`);
       ditheredFrame = floydSteinbergDither(p, frames[i], threshold);
-      console.log(`Dither complete for frame ${i}.`);
+    console.log(`Dither complete for frame ${i}.`);
     } else {
       // Skip dithering, use original frame
       console.log(`Skipping dither for frame ${i} (disabled in settings)`);
@@ -339,24 +339,23 @@ export async function composeResult(p: any, frames: any[], template: Template, q
         } else {
           // Calculate dynamic QR size based on layout and canvas width
           let finalQrSize: number;
-          let qrX: number, qrY: number;
-          let textX: number, textY: number;
-          
+      let qrX: number, qrY: number;
+      let textX: number, textY: number;
+      
           // Calculate QR code position and size based on template layout
-          if (template.layout === 'vertical') {
+      if (template.layout === 'vertical') {
             // Vertical layout: QR code below all photos, centered
-            const lastPhotoY = margin + headerH + 40 + 20 + (template.photoCount - 1) * (cellH + gap) + cellH;
+        const lastPhotoY = margin + headerH + 40 + 20 + (template.photoCount - 1) * (cellH + gap) + cellH;
             
             // Dynamic size: proportional to photo width, but respect min/max
             finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(cellW * 0.7)));
             
             qrX = (W - finalQrSize) / 2;
             qrY = lastPhotoY + qrSpacing;
-            textX = W / 2;
+        textX = W / 2;
             textY = qrY + finalQrSize + 20;
             
             // Bounds check
-            const qrBottom = qrY + finalQrSize;
             const textBottom = textY + 30;
             if (textBottom > H) {
               console.warn('QR code text would overflow, adjusting position');
@@ -365,11 +364,11 @@ export async function composeResult(p: any, frames: any[], template: Template, q
             }
             
             console.log('Vertical layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
-          } else if (template.layout === 'horizontal') {
+      } else if (template.layout === 'horizontal') {
             // Horizontal layout: QR code at right side with proportional sizing
-            const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
+        const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
             finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(photoWidth * 0.6)));
-            
+        
             qrX = W - margin - finalQrSize;
             qrY = margin + headerH + 40 + 20 + photoWidth + qrSpacing;
             textX = qrX + finalQrSize / 2;
@@ -383,18 +382,18 @@ export async function composeResult(p: any, frames: any[], template: Template, q
             }
             
             console.log('Horizontal layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
-          } else if (template.layout === 'grid') {
-            // Grid layout: QR code at bottom center with proportional sizing
-            const cols = template.photoCount === 4 ? 2 : template.photoCount === 6 ? 3 : 2;
-            const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
+      } else if (template.layout === 'grid') {
+        // Grid layout: QR code at bottom center with proportional sizing
+        const cols = template.photoCount === 4 ? 2 : template.photoCount === 6 ? 3 : 2;
+        const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
             finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(photoWidth * 0.8)));
             
             const rows = Math.ceil(template.photoCount / cols);
             const lastPhotoRowY = margin + headerH + 40 + 20 + photoWidth * rows + gap * (rows - 1);
-            
+        
             qrX = (W - finalQrSize) / 2;
             qrY = lastPhotoRowY + qrSpacing;
-            textX = W / 2;
+        textX = W / 2;
             textY = qrY + finalQrSize + 20;
             
             // Bounds check
@@ -405,13 +404,13 @@ export async function composeResult(p: any, frames: any[], template: Template, q
             }
             
             console.log('Grid layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
-          } else {
-            // Default layout (e.g., single photo)
+      } else {
+        // Default layout (e.g., single photo)
             finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(cellW * 0.7)));
             
             qrX = (W - finalQrSize) / 2;
             qrY = margin + headerH + 40 + 20 + cellH + qrSpacing;
-            textX = W / 2;
+        textX = W / 2;
             textY = qrY + finalQrSize + 20;
             
             // Bounds check
@@ -422,24 +421,24 @@ export async function composeResult(p: any, frames: any[], template: Template, q
             }
             
             console.log('Default layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
-          }
-          
+      }
+
           // Draw QR code
           out.image(qrImg, qrX, qrY, finalQrSize, finalQrSize);
-          
+        
           // Add instruction text (standardized across all layouts)
-          out.textSize(18);
-          out.fill(0);
-          out.noStroke();
-          out.textAlign(out.CENTER);
-          out.text('Scan untuk download', textX, textY);
-          out.textSize(14);
-          out.text('(Valid 24 jam)', textX, textY + 20);
-          
+        out.textSize(18);
+        out.fill(0);
+        out.noStroke();
+        out.textAlign(out.CENTER);
+        out.text('Scan untuk download', textX, textY);
+        out.textSize(14);
+        out.text('(Valid 24 jam)', textX, textY + 20);
+        
           console.log('QR code rendered successfully:', { size: finalQrSize, position: { x: qrX, y: qrY } });
-        }
-      } catch (error) {
-        console.error('Error rendering QR code:', error);
+      }
+    } catch (error) {
+      console.error('Error rendering QR code:', error);
         if (error instanceof Error) {
           console.error('Error details:', error.message, error.stack);
         }

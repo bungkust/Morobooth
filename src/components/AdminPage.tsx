@@ -1113,7 +1113,7 @@ export const AdminPage = () => {
                   </div>
 
                   {/* QR Preview */}
-                  {qrCodeSettings.enabled !== false && qrPreviewUrl && (
+                  {(qrCodeSettings.enabled ?? true) && qrPreviewUrl && (
                     <div className="qr-preview-container" style={{ marginTop: '20px', padding: '16px', background: '#f8f9fa', border: '2px solid var(--c-black)', borderRadius: '8px' }}>
                       <h3 style={{ marginTop: '0', marginBottom: '12px', fontSize: '16px' }}>Preview</h3>
                       <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>

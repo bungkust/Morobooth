@@ -218,7 +218,7 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       // 2. Grayscale based on settings
       const settings = getPrinterOutputSettings();
       if (settings.previewGrayscale !== false) {
-        pgPreview.filter(p.GRAY);
+      pgPreview.filter(p.GRAY);
       }
       
       // 3. Bayer dithering for fast preview (only every few frames for performance)
@@ -360,7 +360,7 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
         // Convert to grayscale based on settings
         const settings = getPrinterOutputSettings();
         if (settings.captureGrayscale !== false) {
-          rawShot.filter(p.GRAY);
+        rawShot.filter(p.GRAY);
         }
         
         framesRef.current.push(rawShot);

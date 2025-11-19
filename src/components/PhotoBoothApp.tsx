@@ -82,7 +82,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     
     if (currentPhotoId) {
       try {
-        const downloadURL = getDownloadURL(currentPhotoId);
+      const downloadURL = getDownloadURL(currentPhotoId);
         
         if (!downloadURL) {
           console.error('Failed to generate download URL for photoId:', currentPhotoId);
@@ -103,22 +103,22 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         
         const qrCodeDataURL = await generateQRCodeDataURL(downloadURL, qrSettings);
         
-        if (qrCodeDataURL) {
-          const { composeResult } = await import('../utils/photoComposer');
-          const p5Instance = photoBoothRef.current.getP5Instance?.();
-          const frames = photoBoothRef.current.getFrames?.();
+      if (qrCodeDataURL) {
+        const { composeResult } = await import('../utils/photoComposer');
+        const p5Instance = photoBoothRef.current.getP5Instance?.();
+        const frames = photoBoothRef.current.getFrames?.();
           
-          if (p5Instance && frames) {
-            const printComposite = await composeResult(
-              p5Instance,
-              frames,
-              template,
-              qrCodeDataURL
-            );
-            dataURL = printComposite.canvas.toDataURL('image/png');
+        if (p5Instance && frames) {
+          const printComposite = await composeResult(
+            p5Instance,
+            frames,
+            template,
+            qrCodeDataURL
+          );
+          dataURL = printComposite.canvas.toDataURL('image/png');
           } else {
             console.warn('P5 instance or frames not available for QR composition');
-          }
+      }
         } else {
           console.warn('QR code generation failed, falling back to high-res without QR');
         }

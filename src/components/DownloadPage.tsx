@@ -1,14 +1,12 @@
 import { useState, useEffect } from 'react';
 import { getPhotoById } from '../services/photoStorageService';
 import { getFreshSignedUrl } from '../services/uploadService';
-import type { PhotoRecord } from '../services/photoStorageService';
 
 interface DownloadPageProps {
   photoId: string;
 }
 
 export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
-  const [photo, setPhoto] = useState<PhotoRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [downloadUrl, setDownloadUrl] = useState<string>('');
@@ -58,7 +56,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         return;
       }
 
-      setPhoto(record);
+        // Photo record loaded successfully
 
       // Step 3: Check if photo is uploaded and has supabasePath
       if (record.uploaded && record.supabasePath) {

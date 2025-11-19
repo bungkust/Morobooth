@@ -29,21 +29,29 @@ async function getDB() {
         const store = transaction.objectStore(PHOTO_STORE);
         
         // Get all existing photos and add supabasePath field
-        const request = store.openCursor();
+        // Use native IDB API within upgrade transaction
+        const nativeStore = store as unknown as IDBObjectStore;
+        const request = nativeStore.openCursor();
         const updatePromises: Promise<void>[] = [];
         
-        request.onsuccess = (event) => {
-          const cursor = (event.target as IDBRequest<IDBCursorWithValue>).result;
+        request.onsuccess = (event: Event) => {
+          const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
           if (cursor) {
             const photo = cursor.value;
             // Add supabasePath field if it doesn't exist
             if (photo && !('supabasePath' in photo)) {
               photo.supabasePath = undefined;
+              const updateRequest = cursor.update(photo);
               updatePromises.push(
-                cursor.update(photo).then(() => {
-                  console.log('Migrated photo:', photo.id);
-                }).catch((err) => {
-                  console.error('Failed to migrate photo:', photo.id, err);
+                new Promise<void>((resolve, reject) => {
+                  updateRequest.onsuccess = () => {
+                    console.log('Migrated photo:', photo.id);
+                    resolve();
+                  };
+                  updateRequest.onerror = (err: Event) => {
+                    console.error('Failed to migrate photo:', photo.id, err);
+                    reject(err);
+                  };
                 })
               );
             }
@@ -52,13 +60,13 @@ async function getDB() {
             // All records processed
             Promise.all(updatePromises).then(() => {
               console.log('Database migration completed');
-            }).catch((err) => {
+            }).catch((err: unknown) => {
               console.error('Migration error:', err);
             });
           }
         };
         
-        request.onerror = (event) => {
+        request.onerror = (event: Event) => {
           console.error('Migration cursor error:', event);
         };
       }
