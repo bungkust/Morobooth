@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import p5 from 'p5';
 import { PhotoBooth, type PhotoBoothRef, type AppState } from './PhotoBooth';
 import { Controls } from './Controls';
 import { PreviewModal } from './PreviewModal';
@@ -28,7 +29,9 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const { requestWakeLock, releaseWakeLock } = useWakeLock();
   const detectNativeEnvironment = useCallback(() => {
     const fromBridge = nativeBridge.isNativeApp();
-    const hasRNWebView = typeof window !== 'undefined' && Boolean((window as any).ReactNativeWebView);
+    const hasRNWebView = typeof window !== 'undefined' && Boolean(
+      (window as Window & { ReactNativeWebView?: unknown }).ReactNativeWebView
+    );
     const uaHint =
       typeof navigator !== 'undefined' && /morobooth(app)?/i.test((navigator as Navigator).userAgent ?? '');
     const detected = fromBridge || hasRNWebView || uaHint;
@@ -49,8 +52,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [isNativeApp, setIsNativeApp] = useState<boolean>(false);
   const [appState, setAppState] = useState<AppState>('PREVIEW');
   const [countdownText, setCountdownText] = useState('');
-  const [, setFrames] = useState<any[]>([]);
-  const [, setFinalComposite] = useState<any | null>(null);
+  const [, setFrames] = useState<p5.Image[]>([]);
+  const [, setFinalComposite] = useState<p5.Graphics | null>(null);
   const [, setCanvasSize] = useState({ width: 640, height: 480 });
   const [, setIsReviewMode] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +61,9 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
   const [isBluetoothConnected, setIsBluetoothConnected] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const saveLockRef = useRef(false);
+  const printLockRef = useRef(false); // Synchronous guard for concurrent print prevention
 
   // Helper untuk show notification (ganti alert)
   const showNotification = (message: string, type: 'success' | 'error' = 'error') => {
@@ -177,7 +183,7 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     }
     
     // Listen for Bluetooth status changes
-    const statusHandler = (event: any) => {
+    const statusHandler = (event: CustomEvent<{ connected: boolean; info?: unknown }>) => {
       console.log('PhotoBoothApp: Received bluetoothStatusChange event:', event.detail);
       setIsBluetoothConnected(event.detail.connected);
       if (event.detail.connected) {
@@ -186,14 +192,14 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         console.log('Bluetooth disconnected');
       }
     };
-    window.addEventListener('bluetoothStatusChange', statusHandler);
+    window.addEventListener('bluetoothStatusChange', statusHandler as EventListener);
     
     return () => {
       window.clearInterval(confirmationTimer);
       window.clearTimeout(confirmationTimeout);
-      window.removeEventListener('bluetoothStatusChange', statusHandler);
+      window.removeEventListener('bluetoothStatusChange', statusHandler as EventListener);
     };
-  }, []);
+  }, [detectNativeEnvironment]);
 
   // Initialize wake lock when component mounts
   useEffect(() => {
@@ -211,6 +217,10 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   };
 
   const handleRetake = () => {
+    // Clear photoId when retaking to ensure fresh capture
+    if (photoBoothRef.current?.setPhotoIdForPrint) {
+      photoBoothRef.current.setPhotoIdForPrint(null);
+    }
     onBackToTemplate();
   };
 
@@ -282,6 +292,17 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   };
 
   const handlePrint = async () => {
+    // Guard: Prevent concurrent prints using synchronous ref (React state is async)
+    if (printLockRef.current) {
+      console.warn('[HANDLE_PRINT] Print already in progress, ignoring duplicate request');
+      showNotification('Print sedang diproses, tunggu sebentar...', 'error');
+      return;
+    }
+
+    // Set lock immediately (synchronous) to prevent race condition
+    printLockRef.current = true;
+    setIsPrinting(true); // Update state for UI feedback
+    
     try {
       if (!photoBoothRef.current) {
         console.error('PhotoBooth ref not found');
@@ -296,73 +317,128 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         return;
       }
 
-      // Check if photo has already been saved (to avoid duplicates)
-      let photoId = photoBoothRef.current.getPhotoIdForPrint();
+      // Check upload settings
+      const { getUploadSettings } = await import('../services/configService');
+      const uploadSettings = getUploadSettings();
+      const saveBeforePrint = uploadSettings.saveBeforePrint ?? true;
       
-      // If photo hasn't been saved yet, save it now
-      if (!photoId) {
-        // Get high-res composite dataURL for saving
-        const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
-        if (!highResDataURL) {
-          console.error('Final composite not found for saving');
-          showNotification('Failed: Photo not found', 'error');
-          return;
-        }
+      console.log('[HANDLE_PRINT] Upload settings - saveBeforePrint:', saveBeforePrint);
 
-        // Save photo to IndexedDB (becomes pending for upload)
-        console.log('[HANDLE_PRINT] Starting to save photo locally before print...');
-        console.log('[HANDLE_PRINT] highResDataURL exists:', !!highResDataURL);
-        console.log('[HANDLE_PRINT] highResDataURL type:', typeof highResDataURL);
-        console.log('[HANDLE_PRINT] highResDataURL length:', highResDataURL?.length || 0);
-        
-        const { savePhotoLocally } = await import('../services/photoStorageService');
-        let photoRecord;
-        try {
-          console.log('[HANDLE_PRINT] Calling savePhotoLocally...');
-          photoRecord = await savePhotoLocally(highResDataURL);
-          photoId = photoRecord.id;
-          console.log('[HANDLE_PRINT] ✓ Photo saved locally successfully');
-          console.log('[HANDLE_PRINT] Photo ID:', photoId);
-          console.log('[HANDLE_PRINT] Photo record:', JSON.stringify({
-            id: photoRecord.id,
-            sessionCode: photoRecord.sessionCode,
-            photoNumber: photoRecord.photoNumber,
-            timestamp: photoRecord.timestamp
-          }));
-          
-          // Update photoId in PhotoBooth ref so it's available for next print
-          if (photoBoothRef.current.setPhotoIdForPrint) {
-            console.log('[HANDLE_PRINT] Updating photoId in PhotoBooth ref');
-            photoBoothRef.current.setPhotoIdForPrint(photoId);
-          }
-        } catch (saveError) {
-          console.error('[HANDLE_PRINT] ERROR: Failed to save photo locally');
-          console.error('[HANDLE_PRINT] Error type:', typeof saveError);
-          if (saveError instanceof Error) {
-            console.error('[HANDLE_PRINT] Error name:', saveError.name);
-            console.error('[HANDLE_PRINT] Error message:', saveError.message);
-            console.error('[HANDLE_PRINT] Error stack:', saveError.stack);
-          } else {
-            console.error('[HANDLE_PRINT] Error value:', String(saveError));
-          }
-          
-          // Show more specific error message
-          let errorMessage = 'Failed to save photo. Please try again.';
-          if (saveError instanceof Error) {
-            errorMessage = saveError.message || errorMessage;
-          }
-          
-          console.error('[HANDLE_PRINT] Showing error notification:', errorMessage);
-          showNotification(errorMessage, 'error');
-          return;
-        }
-      } else {
-        console.log('Photo already saved with ID:', photoId, '- Reusing existing photo');
+      // Get high-res composite dataURL for print
+      const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
+      if (!highResDataURL) {
+        console.error('Final composite not found for print');
+        showNotification('Failed: Photo not found', 'error');
+        return;
       }
 
-      // Compose image for print (with QR code using photoId)
-      console.log('Composing image for print with QR code...');
-      const dataURL = await composeImageForPrint(photoId);
+      let photoId: string | null = null;
+
+      // If saveBeforePrint is enabled, save photo first
+      if (saveBeforePrint) {
+        // Atomic check-and-save with lock to prevent duplicate saves
+        if (!saveLockRef.current) {
+          saveLockRef.current = true;
+          try {
+            // First check
+            photoId = photoBoothRef.current.getPhotoIdForPrint();
+            
+            // If photo hasn't been saved yet, save it now
+            if (!photoId) {
+              // Double-check after acquiring lock (another thread might have saved it)
+              photoId = photoBoothRef.current.getPhotoIdForPrint();
+              
+              if (!photoId) {
+                // Save photo to IndexedDB (becomes pending for upload)
+                console.log('[HANDLE_PRINT] Starting to save photo locally before print...');
+                console.log('[HANDLE_PRINT] highResDataURL exists:', !!highResDataURL);
+                console.log('[HANDLE_PRINT] highResDataURL type:', typeof highResDataURL);
+                console.log('[HANDLE_PRINT] highResDataURL length:', highResDataURL?.length || 0);
+                
+                const { savePhotoLocally } = await import('../services/photoStorageService');
+                let photoRecord;
+                try {
+                  console.log('[HANDLE_PRINT] Calling savePhotoLocally...');
+                  photoRecord = await savePhotoLocally(highResDataURL);
+                  photoId = photoRecord.id;
+                  console.log('[HANDLE_PRINT] ✓ Photo saved locally successfully');
+                  console.log('[HANDLE_PRINT] Photo ID:', photoId);
+                  console.log('[HANDLE_PRINT] Photo record:', JSON.stringify({
+                    id: photoRecord.id,
+                    sessionCode: photoRecord.sessionCode,
+                    photoNumber: photoRecord.photoNumber,
+                    timestamp: photoRecord.timestamp
+                  }));
+                  
+                  // Update photoId in PhotoBooth ref so it's available for next print
+                  if (photoBoothRef.current.setPhotoIdForPrint) {
+                    console.log('[HANDLE_PRINT] Updating photoId in PhotoBooth ref');
+                    photoBoothRef.current.setPhotoIdForPrint(photoId);
+                  }
+                } catch (saveError) {
+                  console.error('[HANDLE_PRINT] ERROR: Failed to save photo locally');
+                  console.error('[HANDLE_PRINT] Error type:', typeof saveError);
+                  if (saveError instanceof Error) {
+                    console.error('[HANDLE_PRINT] Error name:', saveError.name);
+                    console.error('[HANDLE_PRINT] Error message:', saveError.message);
+                    console.error('[HANDLE_PRINT] Error stack:', saveError.stack);
+                  } else {
+                    console.error('[HANDLE_PRINT] Error value:', String(saveError));
+                  }
+                  
+                  // Clear photoId on error to maintain state consistency
+                  if (photoBoothRef.current.setPhotoIdForPrint) {
+                    photoBoothRef.current.setPhotoIdForPrint(null);
+                  }
+                  
+                  // Show more specific error message
+                  let errorMessage = 'Failed to save photo. Please try again.';
+                  if (saveError instanceof Error) {
+                    errorMessage = saveError.message || errorMessage;
+                  }
+                  
+                  console.error('[HANDLE_PRINT] Showing error notification:', errorMessage);
+                  showNotification(errorMessage, 'error');
+                  return;
+                }
+              } else {
+                console.log('[HANDLE_PRINT] Photo was saved by another operation while waiting for lock');
+              }
+            } else {
+              console.log('Photo already saved with ID:', photoId, '- Reusing existing photo');
+            }
+          } finally {
+            saveLockRef.current = false;
+          }
+        } else {
+          // Lock is held by another operation, wait briefly and check again
+          console.log('[HANDLE_PRINT] Save lock is held, waiting...');
+          let retries = 0;
+          const maxRetries = 10;
+          while (saveLockRef.current && retries < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            retries++;
+          }
+          
+          // After lock is released, check if photo was saved
+          photoId = photoBoothRef.current.getPhotoIdForPrint();
+          if (!photoId) {
+            console.warn('[HANDLE_PRINT] Photo still not saved after lock release, proceeding without save');
+          } else {
+            console.log('[HANDLE_PRINT] Photo was saved by another operation:', photoId);
+          }
+        }
+      } else {
+        // saveBeforePrint is disabled - skip saving and clear any existing photoId
+        console.log('[HANDLE_PRINT] saveBeforePrint is disabled - skipping save, printing directly');
+        if (photoBoothRef.current.setPhotoIdForPrint) {
+          photoBoothRef.current.setPhotoIdForPrint(null);
+        }
+      }
+
+      // Compose image for print (with QR code using photoId if available)
+      console.log('Composing image for print...');
+      const dataURL = await composeImageForPrint(photoId || undefined);
 
       if (!dataURL) {
         // Fallback to high-res dataURL if composeImageForPrint fails
@@ -370,23 +446,31 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       }
       
       // Get high-res dataURL as fallback if composeImageForPrint fails
-      const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
+      const highResDataURLFallback = photoBoothRef.current.getFinalCompositeDataURL();
       
       // Print via Bluetooth (use composed image with QR code or fallback to high-res)
       console.log('Starting Bluetooth print...');
-      const printDataURL = dataURL || highResDataURL;
+      const printDataURL = dataURL || highResDataURLFallback;
       if (!printDataURL) {
         showNotification('Failed: Photo not found for print', 'error');
         return;
       }
       await bluetoothPrinter.printImage(printDataURL);
       console.log('Print command sent');
-      console.log('Photo ID:', photoId, '- Status: PENDING UPLOAD');
+      if (photoId) {
+        console.log('Photo ID:', photoId, '- Status: PENDING UPLOAD');
+      } else {
+        console.log('Photo printed directly without saving (saveBeforePrint disabled)');
+      }
       // Note: Actual print result will come via PRINT_SUCCESS event
       
     } catch (error) {
       console.error('Print failed:', error);
       showNotification('Failed to print. Please try again.', 'error');
+    } finally {
+      // Release lock synchronously
+      printLockRef.current = false;
+      setIsPrinting(false); // Update state for UI
     }
   };
 
@@ -394,17 +478,22 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
   const handleStateChange = (newState: AppState) => {
     setAppState(newState);
     
+    // Clear photoId when starting new capture (PREVIEW state)
+    if (newState === 'PREVIEW' && photoBoothRef.current?.setPhotoIdForPrint) {
+      photoBoothRef.current.setPhotoIdForPrint(null);
+    }
+    
     // Release wake lock when in review mode
     if (newState === 'REVIEW') {
       releaseWakeLock();
     }
   };
 
-  const handleFramesUpdate = (newFrames: any[]) => {
+  const handleFramesUpdate = (newFrames: p5.Image[]) => {
     setFrames(newFrames);
   };
 
-  const handleFinalCompositeUpdate = (composite: any | null) => {
+  const handleFinalCompositeUpdate = (composite: p5.Graphics | null) => {
     setFinalComposite(composite);
   };
 
@@ -483,6 +572,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           onDownload={handleDownload}
           onPrint={handlePrint}
           isNativeApp={isNativeApp}
+          isPrinting={isPrinting}
+          isBluetoothConnected={isBluetoothConnected}
         />
       </div>
       

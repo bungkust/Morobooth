@@ -28,14 +28,14 @@ function mapSupabaseSession(row: any): SessionInfo {
 }
 
 async function getDB() {
-  return openDB(DB_NAME, 2, {
-    upgrade(db) {
+  return openDB(DB_NAME, 3, {
+    upgrade(db, oldVersion, newVersion) {
       // Create sessions store
       if (!db.objectStoreNames.contains(SESSION_STORE)) {
         db.createObjectStore(SESSION_STORE, { keyPath: 'sessionCode' });
       }
       
-      // Create photos store
+      // Create photos store (if not exists, photoStorageService will handle it)
       if (!db.objectStoreNames.contains(PHOTO_STORE)) {
         const store = db.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
         store.createIndex('sessionCode', 'sessionCode');
@@ -48,22 +48,7 @@ async function getDB() {
 export async function getCurrentSession(): Promise<SessionInfo | null> {
   console.log('[GET_SESSION] Getting current session');
   
-  // Try localStorage first
-  try {
-    const stored = localStorage.getItem('currentSession');
-    if (stored) {
-      const session = JSON.parse(stored);
-      if (session && session.sessionCode) {
-        console.log('[GET_SESSION] ✓ Session found in localStorage:', session.sessionCode);
-        return session;
-      }
-    }
-  } catch (e) {
-    console.warn('[GET_SESSION] Failed to parse localStorage session:', e);
-  }
-  
-  // Fallback to IndexedDB
-  console.log('[GET_SESSION] Falling back to IndexedDB...');
+  // PRIORITIZE IndexedDB as source of truth (fixes state inconsistency)
   try {
     const db = await getDB();
     const allSessions = await db.getAll(SESSION_STORE);
@@ -75,11 +60,12 @@ export async function getCurrentSession(): Promise<SessionInfo | null> {
       
       console.log('[GET_SESSION] ✓ Session found in IndexedDB:', latestSession.sessionCode);
       
-      // Sync back to localStorage
+      // Sync to localStorage (non-blocking, non-fatal)
       try {
         localStorage.setItem('currentSession', JSON.stringify(latestSession));
         console.log('[GET_SESSION] ✓ Session synced to localStorage');
       } catch (e) {
+        // Non-fatal: localStorage might be full or blocked, but IndexedDB is source of truth
         console.warn('[GET_SESSION] Failed to sync to localStorage (non-fatal):', e);
       }
       
@@ -87,6 +73,21 @@ export async function getCurrentSession(): Promise<SessionInfo | null> {
     }
   } catch (e) {
     console.error('[GET_SESSION] Failed to get session from IndexedDB:', e);
+  }
+  
+  // Fallback to localStorage only if IndexedDB fails completely
+  console.log('[GET_SESSION] Falling back to localStorage...');
+  try {
+    const stored = localStorage.getItem('currentSession');
+    if (stored) {
+      const session = JSON.parse(stored);
+      if (session && session.sessionCode) {
+        console.log('[GET_SESSION] ✓ Session found in localStorage (fallback):', session.sessionCode);
+        return session;
+      }
+    }
+  } catch (e) {
+    console.warn('[GET_SESSION] Failed to parse localStorage session:', e);
   }
   
   console.log('[GET_SESSION] No session found');
@@ -183,64 +184,106 @@ export async function incrementPhotoCount(): Promise<number> {
       console.log('[INCREMENT_PHOTO_COUNT] Supabase not configured, skipping');
     }
     
-    // Update IndexedDB with transaction
+    // Update IndexedDB with transaction (with retry mechanism)
     console.log('[INCREMENT_PHOTO_COUNT] Step 3: Updating IndexedDB');
-    try {
-      const db = await getDB();
-      console.log('[INCREMENT_PHOTO_COUNT] ✓ Database connection opened');
-      console.log('[INCREMENT_PHOTO_COUNT] Attempting to save session:', {
-        sessionCode: updatedSession.sessionCode,
-        eventName: updatedSession.eventName,
-        photoCount: updatedSession.photoCount,
-        createdAt: updatedSession.createdAt
-      });
-      
-      // Use transaction for atomicity
-      const tx = db.transaction(SESSION_STORE, 'readwrite');
-      await tx.store.put(updatedSession);
-      await tx.done;
-      
-      console.log('[INCREMENT_PHOTO_COUNT] ✓ Session saved to IndexedDB');
-    } catch (dbError: any) {
-      console.error('[INCREMENT_PHOTO_COUNT] ERROR: IndexedDB save failed');
-      console.error('[INCREMENT_PHOTO_COUNT] Error name:', dbError?.name);
-      console.error('[INCREMENT_PHOTO_COUNT] Error message:', dbError?.message);
-      console.error('[INCREMENT_PHOTO_COUNT] Error code:', dbError?.code);
-      console.error('[INCREMENT_PHOTO_COUNT] Error stack:', dbError?.stack);
-      
-      // Check for quota exceeded error
-      if (dbError.name === 'QuotaExceededError' || dbError.message?.includes('quota')) {
-        console.error('[INCREMENT_PHOTO_COUNT] ERROR TYPE: QuotaExceededError');
-        throw new Error('Storage quota exceeded. Please clear some data.');
+    let dbError: any = null;
+    let retries = 0;
+    const maxRetries = 3;
+    const retryDelay = 200; // ms
+    
+    while (retries < maxRetries) {
+      try {
+        const db = await getDB();
+        console.log('[INCREMENT_PHOTO_COUNT] ✓ Database connection opened (attempt', retries + 1, ')');
+        console.log('[INCREMENT_PHOTO_COUNT] Attempting to save session:', {
+          sessionCode: updatedSession.sessionCode,
+          eventName: updatedSession.eventName,
+          photoCount: updatedSession.photoCount,
+          createdAt: updatedSession.createdAt
+        });
+        
+        // Use transaction for atomicity
+        const tx = db.transaction(SESSION_STORE, 'readwrite');
+        await tx.store.put(updatedSession);
+        await tx.done;
+        
+        console.log('[INCREMENT_PHOTO_COUNT] ✓ Session saved to IndexedDB');
+        dbError = null; // Success, clear error
+        break; // Exit retry loop
+      } catch (error: any) {
+        dbError = error;
+        retries++;
+        
+        console.error(`[INCREMENT_PHOTO_COUNT] IndexedDB save attempt ${retries} failed:`, {
+          name: error?.name,
+          message: error?.message,
+          code: error?.code
+        });
+        
+        // Check for quota exceeded error (no retry)
+        if (error.name === 'QuotaExceededError' || error.message?.includes('quota')) {
+          console.error('[INCREMENT_PHOTO_COUNT] ERROR TYPE: QuotaExceededError');
+          throw new Error('Storage quota exceeded. Please clear some data.');
+        }
+        
+        // Retry for transaction errors
+        if (error.name === 'TransactionInactiveError' || 
+            error.message?.includes('transaction') ||
+            error.message?.includes('busy') ||
+            error.message?.includes('locked')) {
+          
+          if (retries < maxRetries) {
+            const delay = retryDelay * retries;
+            console.log(`[INCREMENT_PHOTO_COUNT] Retrying in ${delay}ms... (attempt ${retries + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue; // Retry
+          } else {
+            console.error('[INCREMENT_PHOTO_COUNT] ERROR TYPE: TransactionInactiveError (max retries reached)');
+            throw new Error('Database is busy. Please wait a moment and try again.');
+          }
+        }
+        
+        // For other errors, don't retry if it's not a transient error
+        if (retries >= maxRetries) {
+          break; // Exit retry loop, will throw error below
+        }
+        
+        // Wait before retry for other errors
+        const delay = retryDelay * retries;
+        console.log(`[INCREMENT_PHOTO_COUNT] Retrying in ${delay}ms... (attempt ${retries + 1}/${maxRetries})`);
+        await new Promise(resolve => setTimeout(resolve, delay));
       }
-      
-      // Check for database locked error
-      if (dbError.name === 'TransactionInactiveError' || dbError.message?.includes('transaction')) {
-        console.error('[INCREMENT_PHOTO_COUNT] ERROR TYPE: TransactionInactiveError');
-        throw new Error('Database is busy. Please wait a moment and try again.');
-      }
+    }
+    
+    // If we exited the loop with an error, throw it
+    if (dbError) {
+      console.error('[INCREMENT_PHOTO_COUNT] ERROR: IndexedDB save failed after', maxRetries, 'attempts');
+      console.error('[INCREMENT_PHOTO_COUNT] Final error name:', dbError?.name);
+      console.error('[INCREMENT_PHOTO_COUNT] Final error message:', dbError?.message);
+      console.error('[INCREMENT_PHOTO_COUNT] Final error code:', dbError?.code);
+      console.error('[INCREMENT_PHOTO_COUNT] Final error stack:', dbError?.stack);
       
       throw new Error(`Failed to save session to database: ${dbError.message || dbError.name || 'Unknown error'}`);
     }
     
-    // Update localStorage (after IndexedDB success)
-    console.log('[INCREMENT_PHOTO_COUNT] Step 4: Updating localStorage');
+    // Update localStorage (after IndexedDB success) - non-blocking, non-fatal
+    // IndexedDB is source of truth, so localStorage failure is not critical
+    console.log('[INCREMENT_PHOTO_COUNT] Step 4: Updating localStorage (non-blocking)');
     try {
       localStorage.setItem('currentSession', JSON.stringify(updatedSession));
       console.log('[INCREMENT_PHOTO_COUNT] ✓ localStorage updated');
     } catch (storageError: any) {
-      console.error('[INCREMENT_PHOTO_COUNT] ERROR: localStorage update failed');
-      console.error('[INCREMENT_PHOTO_COUNT] Storage error:', storageError);
+      // Non-fatal: IndexedDB is source of truth, localStorage is just cache
+      console.warn('[INCREMENT_PHOTO_COUNT] WARNING: localStorage update failed (non-fatal)');
+      console.warn('[INCREMENT_PHOTO_COUNT] Storage error:', storageError);
       
-      // Check for quota exceeded
+      // Log specific error type for debugging
       if (storageError.name === 'QuotaExceededError' || storageError.message?.includes('quota')) {
-        console.error('[INCREMENT_PHOTO_COUNT] ERROR TYPE: localStorage QuotaExceededError');
-        // IndexedDB already succeeded, so this is non-fatal but log it
-        console.warn('[INCREMENT_PHOTO_COUNT] WARNING: localStorage quota exceeded but IndexedDB succeeded');
+        console.warn('[INCREMENT_PHOTO_COUNT] localStorage quota exceeded (IndexedDB is source of truth)');
       } else {
-        // Other localStorage errors are non-fatal if IndexedDB succeeded
-        console.warn('[INCREMENT_PHOTO_COUNT] WARNING: localStorage update failed but IndexedDB succeeded');
+        console.warn('[INCREMENT_PHOTO_COUNT] localStorage update failed (IndexedDB is source of truth)');
       }
+      // Don't throw - IndexedDB already succeeded, this is just a cache update
     }
     
     console.log('[INCREMENT_PHOTO_COUNT] SUCCESS: incrementPhotoCount completed');

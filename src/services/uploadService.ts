@@ -27,14 +27,46 @@ export async function uploadPhotoToSupabase(photo: PhotoRecord): Promise<UploadR
     const blob = await dataURLtoBlob(photo.imageDataURL);
     const filename = `${photo.id}.png`;
     
-    const { error: uploadError } = await supabase.storage
+    // Check if file already exists to handle duplicate uploads gracefully
+    const { data: existingFiles, error: listError } = await supabase.storage
       .from('photos')
-      .upload(filename, blob, {
-        contentType: 'image/png',
-        upsert: false
+      .list('', {
+        search: filename
       });
     
-    if (uploadError) throw uploadError;
+    // Handle list operation errors
+    if (listError) {
+      // Log the error but don't block upload - upsert: true will handle duplicates anyway
+      console.warn(`[UPLOAD] Failed to check if file exists (non-fatal):`, listError.message);
+      console.warn(`[UPLOAD] Proceeding with upload anyway (upsert will handle duplicates)`);
+    }
+    
+    // Only check fileExists if list operation succeeded
+    const fileExists = !listError && existingFiles && existingFiles.length > 0 && 
+                      existingFiles.some(f => f.name === filename);
+    
+    if (fileExists) {
+      console.log(`[UPLOAD] File ${filename} already exists, skipping upload but generating signed URL`);
+    } else {
+      // Upload file (use upsert: true to handle edge cases where file might exist)
+      const { error: uploadError } = await supabase.storage
+        .from('photos')
+        .upload(filename, blob, {
+          contentType: 'image/png',
+          upsert: true // Allow overwrite if file exists (handles edge cases)
+        });
+      
+      if (uploadError) {
+        // If upload fails with "already exists" error, that's okay - file is already there
+        if (uploadError.message?.includes('already exists') || uploadError.message?.includes('duplicate')) {
+          console.log(`[UPLOAD] File ${filename} already exists (detected via error), proceeding with signed URL generation`);
+        } else {
+          throw uploadError;
+        }
+      } else {
+        console.log(`[UPLOAD] Successfully uploaded ${filename}`);
+      }
+    }
     
     // Get signed URL (24 hours) - for backward compatibility
     const { data: signedData, error: signError } = await supabase.storage

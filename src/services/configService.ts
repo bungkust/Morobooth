@@ -346,3 +346,51 @@ export function resetQRCodeSettings(): void {
     console.error('Failed to reset QR code settings:', error);
   }
 }
+
+// Upload Settings
+export interface UploadSettings {
+  saveBeforePrint?: boolean; // Save photo to storage before print (default: true)
+}
+
+export const DEFAULT_UPLOAD_SETTINGS: Required<UploadSettings> = {
+  saveBeforePrint: true // Default: save before print (backward compatible)
+};
+
+export function getUploadSettings(): UploadSettings {
+  try {
+    const stored = localStorage.getItem('morobooth_upload_settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      // Use explicit checks to preserve false values
+      return {
+        saveBeforePrint: parsed.saveBeforePrint !== undefined ? parsed.saveBeforePrint : DEFAULT_UPLOAD_SETTINGS.saveBeforePrint
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to parse upload settings:', error);
+  }
+  
+  return { ...DEFAULT_UPLOAD_SETTINGS };
+}
+
+export function setUploadSettings(settings: UploadSettings): void {
+  try {
+    // Use explicit checks to preserve false values
+    const payload: Required<UploadSettings> = {
+      saveBeforePrint: settings.saveBeforePrint !== undefined ? settings.saveBeforePrint : DEFAULT_UPLOAD_SETTINGS.saveBeforePrint
+    };
+    localStorage.setItem('morobooth_upload_settings', JSON.stringify(payload));
+    console.log('Upload settings saved:', payload);
+  } catch (error) {
+    console.error('Failed to save upload settings:', error);
+    throw new Error('Failed to save upload settings');
+  }
+}
+
+export function resetUploadSettings(): void {
+  try {
+    localStorage.removeItem('morobooth_upload_settings');
+  } catch (error) {
+    console.error('Failed to reset upload settings:', error);
+  }
+}

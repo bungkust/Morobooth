@@ -16,8 +16,8 @@ import {
 import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
 import { bulkUploadPhotos, type UploadResult } from '../services/uploadService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings } from '../services/configService';
-import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS } from '../services/configService';
+import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings, UploadSettings } from '../services/configService';
+import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS, getUploadSettings, setUploadSettings, resetUploadSettings } from '../services/configService';
 import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
@@ -211,6 +211,11 @@ export const AdminPage = () => {
   });
   const [qrPreviewUrl, setQrPreviewUrl] = useState<string>('');
 
+  // Upload settings
+  const [uploadSettings, setUploadSettingsState] = useState<UploadSettings>({
+    saveBeforePrint: true
+  });
+
   // Helper untuk show notification (ganti alert)
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -274,6 +279,9 @@ export const AdminPage = () => {
       setQrCodeSettingsState(savedQrSettings);
       // Generate preview QR code
       generateQRPreview(savedQrSettings);
+      // Load upload settings
+      const savedUploadSettings = getUploadSettings();
+      setUploadSettingsState(savedUploadSettings);
     }
   }, [authenticated, loadData]);
 
@@ -944,6 +952,83 @@ export const AdminPage = () => {
                     </div>
                   </div>
                 )}
+              </div>
+
+              {/* Upload Settings Section */}
+              <div className="admin-card" style={{ marginTop: '20px' }}>
+                <div className="card-header">
+                  <h2>Upload Settings</h2>
+                </div>
+                <div className="setting-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={uploadSettings.saveBeforePrint ?? true}
+                      onChange={(e) => {
+                        setUploadSettingsState({
+                          ...uploadSettings,
+                          saveBeforePrint: e.target.checked
+                        });
+                      }}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: '16px', fontWeight: '500' }}>
+                      Save photo before print
+                    </span>
+                  </label>
+                  <p style={{ margin: '8px 0 0 32px', fontSize: '14px', color: '#666', lineHeight: '1.5' }}>
+                    Jika enabled, foto akan disimpan ke storage sebelum print (untuk upload nanti). 
+                    Jika disabled, langsung print tanpa menyimpan.
+                  </p>
+                  {!(uploadSettings.saveBeforePrint ?? true) && (
+                    <div style={{ 
+                      margin: '12px 0 0 32px', 
+                      padding: '12px', 
+                      background: '#fff3cd', 
+                      border: '1px solid #ffc107', 
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      color: '#856404'
+                    }}>
+                      <strong>⚠️ Warning:</strong> Jika disabled:
+                      <ul style={{ margin: '8px 0 0 20px', padding: 0 }}>
+                        <li>Foto tidak akan disimpan ke storage</li>
+                        <li>Tidak bisa di-upload nanti</li>
+                        <li>QR code tidak muncul di print</li>
+                        <li>Photo count tidak di-track</li>
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => {
+                      try {
+                        setUploadSettings(uploadSettings);
+                        const saved = getUploadSettings();
+                        console.log('Upload settings saved successfully:', saved);
+                        showNotification('Upload settings saved! Changes will apply to next print.', 'success');
+                      } catch (error) {
+                        console.error('Failed to save upload settings:', error);
+                        showNotification('Failed to save upload settings. Please try again.', 'error');
+                      }
+                    }}
+                    className="primary-btn"
+                  >
+                    Save Settings
+                  </button>
+                  <button
+                    onClick={() => {
+                      const defaults = { saveBeforePrint: true };
+                      setUploadSettingsState(defaults);
+                      resetUploadSettings();
+                      showNotification('Upload settings reset to defaults', 'info');
+                    }}
+                    className="secondary-btn"
+                  >
+                    Reset to Defaults
+                  </button>
+                </div>
               </div>
 
               {/* QR Code Settings Section */}
