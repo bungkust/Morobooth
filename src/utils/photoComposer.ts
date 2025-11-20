@@ -162,14 +162,22 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   const cellH = cellW; // Rasio 1:1
   
   // Calculate QR code space with dynamic sizing
-  // QR size: minimum 80px for readability, maximum proportional to photo width (60-80%)
+  // QR size: 70% of paper width (W), not photo width
   const minQrSize = 80;
-  const maxQrSize = Math.floor(cellW * 0.8); // 80% of photo width
-  const baseQrSize = Math.max(minQrSize, Math.min(120, maxQrSize)); // Default 120px, but respect constraints
+  const qrSizePercent = 0.7; // 70% of paper width
+  const baseQrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent)); // 70% of paper width
   const qrSize = qrCodeDataURL ? baseQrSize : 0;
   const textHeight = 50; // Space for "Scan untuk download" + "(Valid 24 jam)"
   const qrSpacing = 80; // Spacing below photos before QR
   const qrSpace = qrCodeDataURL ? qrSize + textHeight + qrSpacing : 0;
+  
+  console.log('[COMPOSE_RESULT] QR size calculation:', {
+    paperWidth: W,
+    qrSizePercent: `${(qrSizePercent * 100).toFixed(0)}%`,
+    baseQrSize,
+    qrSize,
+    qrSpace
+  });
 
   let H: number = 0; // Will be calculated per layout
   let photoPositions: { x: number; y: number }[] = [];
@@ -322,21 +330,24 @@ export async function composeResult(p: any, frames: any[], template: Template, q
 
   // Render QR code if data is provided
   if (qrCodeDataURL) {
-    console.log('Rendering QR code...');
+    console.log('[COMPOSE_RESULT] Rendering QR code...');
+    console.log('[COMPOSE_RESULT] QR code data URL length:', qrCodeDataURL.length);
+    console.log('[COMPOSE_RESULT] QR code data URL starts with data:image:', qrCodeDataURL.startsWith('data:image'));
     
     // Validate QR code data URL
     if (!qrCodeDataURL || typeof qrCodeDataURL !== 'string' || !qrCodeDataURL.startsWith('data:image')) {
-      console.error('Invalid QR code data URL format');
-      console.log('No QR code data provided. Composing without QR code.');
+      console.error('[COMPOSE_RESULT] Invalid QR code data URL format');
+      console.log('[COMPOSE_RESULT] No QR code data provided. Composing without QR code.');
     } else {
       try {
         // Load QR code image asynchronously
         const qrImg = await loadImageSafe(p, qrCodeDataURL);
         
         if (!qrImg) {
-          console.error('Failed to load QR code image');
-          console.log('Composing without QR code due to load failure.');
+          console.error('[COMPOSE_RESULT] Failed to load QR code image');
+          console.log('[COMPOSE_RESULT] Composing without QR code due to load failure.');
         } else {
+          console.log('[COMPOSE_RESULT] QR code image loaded successfully, dimensions:', qrImg.width, 'x', qrImg.height);
           // Calculate dynamic QR size based on layout and canvas width
           let finalQrSize: number;
       let qrX: number, qrY: number;
@@ -347,8 +358,8 @@ export async function composeResult(p: any, frames: any[], template: Template, q
             // Vertical layout: QR code below all photos, centered
         const lastPhotoY = margin + headerH + 40 + 20 + (template.photoCount - 1) * (cellH + gap) + cellH;
             
-            // Dynamic size: proportional to photo width, but respect min/max
-            finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(cellW * 0.7)));
+            // Use 70% of paper width
+            finalQrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent));
             
             qrX = (W - finalQrSize) / 2;
             qrY = lastPhotoY + qrSpacing;
@@ -363,15 +374,24 @@ export async function composeResult(p: any, frames: any[], template: Template, q
               textY = qrY + finalQrSize + 20;
             }
             
-            console.log('Vertical layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
+            console.log('[COMPOSE_RESULT] Vertical layout - QR position:', { 
+              qrX, qrY, textX, textY, 
+              canvasH: H, 
+              qrSize: finalQrSize,
+              paperWidth: W,
+              qrSizePercent: `${(finalQrSize / W * 100).toFixed(1)}%`
+            });
       } else if (template.layout === 'horizontal') {
-            // Horizontal layout: QR code at right side with proportional sizing
+            // Horizontal layout: QR code below photos, centered
         const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
-            finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(photoWidth * 0.6)));
+        const lastPhotoY = margin + headerH + 40 + 20 + photoWidth;
         
-            qrX = W - margin - finalQrSize;
-            qrY = margin + headerH + 40 + 20 + photoWidth + qrSpacing;
-            textX = qrX + finalQrSize / 2;
+            // Use 70% of paper width
+            finalQrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent));
+        
+            qrX = (W - finalQrSize) / 2; // Center horizontally
+            qrY = lastPhotoY + qrSpacing;
+            textX = W / 2; // Center text alignment
             textY = qrY + finalQrSize + 20;
             
             // Bounds check
@@ -381,12 +401,20 @@ export async function composeResult(p: any, frames: any[], template: Template, q
               textY = qrY + finalQrSize + 20;
             }
             
-            console.log('Horizontal layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
+            console.log('[COMPOSE_RESULT] Horizontal layout - QR position:', { 
+              qrX, qrY, textX, textY, 
+              canvasH: H, 
+              qrSize: finalQrSize,
+              paperWidth: W,
+              qrSizePercent: `${(finalQrSize / W * 100).toFixed(1)}%`
+            });
       } else if (template.layout === 'grid') {
-        // Grid layout: QR code at bottom center with proportional sizing
+        // Grid layout: QR code at bottom center
         const cols = template.photoCount === 4 ? 2 : template.photoCount === 6 ? 3 : 2;
         const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
-            finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(photoWidth * 0.8)));
+        
+            // Use 70% of paper width
+            finalQrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent));
             
             const rows = Math.ceil(template.photoCount / cols);
             const lastPhotoRowY = margin + headerH + 40 + 20 + photoWidth * rows + gap * (rows - 1);
@@ -403,10 +431,17 @@ export async function composeResult(p: any, frames: any[], template: Template, q
               textY = qrY + finalQrSize + 20;
             }
             
-            console.log('Grid layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
+            console.log('[COMPOSE_RESULT] Grid layout - QR position:', { 
+              qrX, qrY, textX, textY, 
+              canvasH: H, 
+              qrSize: finalQrSize,
+              paperWidth: W,
+              qrSizePercent: `${(finalQrSize / W * 100).toFixed(1)}%`
+            });
       } else {
         // Default layout (e.g., single photo)
-            finalQrSize = Math.max(minQrSize, Math.min(qrSize, Math.floor(cellW * 0.7)));
+            // Use 70% of paper width
+            finalQrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent));
             
             qrX = (W - finalQrSize) / 2;
             qrY = margin + headerH + 40 + 20 + cellH + qrSpacing;
@@ -420,10 +455,17 @@ export async function composeResult(p: any, frames: any[], template: Template, q
               textY = qrY + finalQrSize + 20;
             }
             
-            console.log('Default layout - QR position:', { qrX, qrY, textX, textY, canvasH: H, qrSize: finalQrSize });
+            console.log('[COMPOSE_RESULT] Default layout - QR position:', { 
+              qrX, qrY, textX, textY, 
+              canvasH: H, 
+              qrSize: finalQrSize,
+              paperWidth: W,
+              qrSizePercent: `${(finalQrSize / W * 100).toFixed(1)}%`
+            });
       }
 
           // Draw QR code
+          console.log('[COMPOSE_RESULT] Drawing QR code at:', { x: qrX, y: qrY, size: finalQrSize });
           out.image(qrImg, qrX, qrY, finalQrSize, finalQrSize);
         
           // Add instruction text (standardized across all layouts)
@@ -435,18 +477,23 @@ export async function composeResult(p: any, frames: any[], template: Template, q
         out.textSize(14);
         out.text('(Valid 24 jam)', textX, textY + 20);
         
-          console.log('QR code rendered successfully:', { size: finalQrSize, position: { x: qrX, y: qrY } });
+          console.log('[COMPOSE_RESULT] QR code rendered successfully:', { 
+            size: finalQrSize, 
+            position: { x: qrX, y: qrY },
+            paperWidth: W,
+            qrSizePercent: `${(finalQrSize / W * 100).toFixed(1)}%`
+          });
       }
-    } catch (error) {
-      console.error('Error rendering QR code:', error);
+      } catch (error) {
+        console.error('[COMPOSE_RESULT] Error rendering QR code:', error);
         if (error instanceof Error) {
-          console.error('Error details:', error.message, error.stack);
+          console.error('[COMPOSE_RESULT] Error details:', error.message, error.stack);
         }
-        console.log('Composing without QR code due to error.');
+        console.log('[COMPOSE_RESULT] Composing without QR code due to error.');
       }
     }
   } else {
-    console.log('No QR code data provided. Composing without QR code.');
+    console.log('[COMPOSE_RESULT] No QR code data provided. Composing without QR code.');
   }
 
   console.log('Composing complete. Ready for review.');

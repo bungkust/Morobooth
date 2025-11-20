@@ -9,7 +9,7 @@ export interface PhotoRecord {
   timestamp: string;
   uploaded: boolean;
   supabaseUrl?: string;
-  supabasePath?: string; // Permanent path in Supabase storage (e.g., "ABC123-001.png")
+  supabasePath?: string; // Permanent path in Supabase storage (e.g., "ABC123/ABC123-001.png" for new format, or "ABC123-001.png" for old format - backward compatibility)
 }
 
 const DB_NAME = 'morobooth-db';

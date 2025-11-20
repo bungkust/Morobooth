@@ -78,43 +78,64 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     
     // Use provided photoId or get from ref
     const currentPhotoId = photoId || photoBoothRef.current.getPhotoIdForPrint();
+    console.log('[COMPOSE_IMAGE_FOR_PRINT] PhotoId:', currentPhotoId || 'none');
     
     // Validate photoId format
     if (currentPhotoId && (!currentPhotoId.includes('-') || currentPhotoId.split('-').length !== 2)) {
-      console.error('Invalid photoId format:', currentPhotoId);
+      console.error('[COMPOSE_IMAGE_FOR_PRINT] Invalid photoId format:', currentPhotoId);
       // Fallback to high-res without QR
-      return photoBoothRef.current.getFinalCompositeDataURL();
+      const fallback = photoBoothRef.current.getFinalCompositeDataURL();
+      if (!fallback) {
+        console.error('[COMPOSE_IMAGE_FOR_PRINT] Fallback getFinalCompositeDataURL returned null');
+      }
+      return fallback;
     }
     
     if (currentPhotoId) {
       try {
       const downloadURL = getDownloadURL(currentPhotoId);
+      console.log('[COMPOSE_IMAGE_FOR_PRINT] Download URL:', downloadURL);
         
         if (!downloadURL) {
-          console.error('Failed to generate download URL for photoId:', currentPhotoId);
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] Failed to generate download URL for photoId:', currentPhotoId);
           // Fallback to high-res without QR
-          return photoBoothRef.current.getFinalCompositeDataURL();
+          const fallback = photoBoothRef.current.getFinalCompositeDataURL();
+          if (!fallback) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] Fallback getFinalCompositeDataURL returned null');
+          }
+          return fallback;
         }
         
         // Load QR settings from configService
         const { getQRCodeSettings } = await import('../services/configService');
         const qrSettings = getQRCodeSettings();
+        console.log('[COMPOSE_IMAGE_FOR_PRINT] QR settings:', { enabled: qrSettings.enabled, width: qrSettings.width });
         
         // Check if QR code is enabled
         if (qrSettings.enabled === false) {
-          console.log('QR code is disabled in settings, printing without QR code');
+          console.log('[COMPOSE_IMAGE_FOR_PRINT] QR code is disabled in settings, printing without QR code');
           // Fallback to high-res without QR
-          return photoBoothRef.current.getFinalCompositeDataURL();
+          const fallback = photoBoothRef.current.getFinalCompositeDataURL();
+          if (!fallback) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] Fallback getFinalCompositeDataURL returned null');
+          }
+          return fallback;
         }
         
         const qrCodeDataURL = await generateQRCodeDataURL(downloadURL, qrSettings);
+        console.log('[COMPOSE_IMAGE_FOR_PRINT] QR code generated:', !!qrCodeDataURL, qrCodeDataURL ? `length: ${qrCodeDataURL.length}` : '');
         
       if (qrCodeDataURL) {
         const { composeResult } = await import('../utils/photoComposer');
         const p5Instance = photoBoothRef.current.getP5Instance?.();
         const frames = photoBoothRef.current.getFrames?.();
+        
+        console.log('[COMPOSE_IMAGE_FOR_PRINT] P5 instance:', !!p5Instance, 'Frames:', frames?.length || 0);
           
-        if (p5Instance && frames) {
+        if (p5Instance && frames && frames.length > 0) {
+          if (frames.length !== template.photoCount) {
+            console.warn(`[COMPOSE_IMAGE_FOR_PRINT] Frames count mismatch: expected ${template.photoCount}, got ${frames.length}`);
+          }
           const printComposite = await composeResult(
             p5Instance,
             frames,
@@ -122,23 +143,34 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
             qrCodeDataURL
           );
           dataURL = printComposite.canvas.toDataURL('image/png');
+          console.log('[COMPOSE_IMAGE_FOR_PRINT] ✓ QR code composed successfully, dataURL length:', dataURL.length);
           } else {
-            console.warn('P5 instance or frames not available for QR composition');
+            console.warn('[COMPOSE_IMAGE_FOR_PRINT] P5 instance or frames not available for QR composition', {
+              hasP5: !!p5Instance,
+              framesLength: frames?.length || 0
+            });
       }
         } else {
-          console.warn('QR code generation failed, falling back to high-res without QR');
+          console.warn('[COMPOSE_IMAGE_FOR_PRINT] QR code generation failed, falling back to high-res without QR');
         }
       } catch (error) {
-        console.error('Error composing image with QR code:', error);
+        console.error('[COMPOSE_IMAGE_FOR_PRINT] Error composing image with QR code:', error);
         if (error instanceof Error) {
-          console.error('Error details:', error.message, error.stack);
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] Error details:', error.message, error.stack);
         }
         // Fallback to high-res without QR
       }
+    } else {
+      console.log('[COMPOSE_IMAGE_FOR_PRINT] No photoId available, composing without QR code');
     }
     
     if (!dataURL) {
       dataURL = photoBoothRef.current.getFinalCompositeDataURL();
+      if (!dataURL) {
+        console.error('[COMPOSE_IMAGE_FOR_PRINT] getFinalCompositeDataURL returned null');
+      } else {
+        console.log('[COMPOSE_IMAGE_FOR_PRINT] Using fallback high-res dataURL, length:', dataURL.length);
+      }
     }
     return dataURL;
   };
@@ -429,10 +461,30 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           }
         }
       } else {
-        // saveBeforePrint is disabled - skip saving and clear any existing photoId
-        console.log('[HANDLE_PRINT] saveBeforePrint is disabled - skipping save, printing directly');
-        if (photoBoothRef.current.setPhotoIdForPrint) {
-          photoBoothRef.current.setPhotoIdForPrint(null);
+        // saveBeforePrint is disabled - BUT we still need photoId for QR code generation
+        console.log('[HANDLE_PRINT] saveBeforePrint is disabled - checking for existing photoId for QR code');
+        photoId = photoBoothRef.current.getPhotoIdForPrint();
+        
+        // If no photoId exists, we need to save it temporarily for QR code
+        if (!photoId) {
+          console.log('[HANDLE_PRINT] No photoId found, saving temporarily for QR code generation');
+          try {
+            const { savePhotoLocally } = await import('../services/photoStorageService');
+            const photoRecord = await savePhotoLocally(highResDataURL);
+            photoId = photoRecord.id;
+            
+            // Store photoId temporarily (will be used for QR code)
+            if (photoBoothRef.current.setPhotoIdForPrint) {
+              photoBoothRef.current.setPhotoIdForPrint(photoId);
+            }
+            console.log('[HANDLE_PRINT] ✓ Photo saved temporarily for QR code, ID:', photoId);
+          } catch (saveError) {
+            console.error('[HANDLE_PRINT] Failed to save photo for QR code:', saveError);
+            // Continue without QR code - non-fatal error
+            photoId = null;
+          }
+        } else {
+          console.log('[HANDLE_PRINT] Using existing photoId for QR code:', photoId);
         }
       }
 
@@ -456,11 +508,15 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         return;
       }
       await bluetoothPrinter.printImage(printDataURL);
-      console.log('Print command sent');
+      console.log('[HANDLE_PRINT] Print command sent');
       if (photoId) {
-        console.log('Photo ID:', photoId, '- Status: PENDING UPLOAD');
+        if (saveBeforePrint) {
+          console.log('[HANDLE_PRINT] Photo ID:', photoId, '- Status: PENDING UPLOAD');
+        } else {
+          console.log('[HANDLE_PRINT] Photo ID:', photoId, '- Saved temporarily for QR code (saveBeforePrint disabled)');
+        }
       } else {
-        console.log('Photo printed directly without saving (saveBeforePrint disabled)');
+        console.log('[HANDLE_PRINT] Photo printed directly without QR code (no photoId available)');
       }
       // Note: Actual print result will come via PRINT_SUCCESS event
       
