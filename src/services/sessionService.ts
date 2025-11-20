@@ -29,7 +29,7 @@ function mapSupabaseSession(row: any): SessionInfo {
 
 async function getDB() {
   return openDB(DB_NAME, 3, {
-    upgrade(db, oldVersion, newVersion) {
+    upgrade(db, _oldVersion, _newVersion) {
       // Create sessions store
       if (!db.objectStoreNames.contains(SESSION_STORE)) {
         db.createObjectStore(SESSION_STORE, { keyPath: 'sessionCode' });
