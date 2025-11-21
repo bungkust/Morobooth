@@ -1,7 +1,7 @@
 import { UniversalBluetoothPrinterService } from './universalBluetoothPrinterService';
 import { nativeBridge } from './nativeBridgeService';
 import { createStreetCoffeeReceipt } from './receiptTemplates';
-import { DEFAULT_PRINTER_OUTPUT, getPrinterOutputSettings } from './configService';
+import { DEFAULT_PRINTER_OUTPUT, getPrinterOutputSettings, getPrinterSizeSettings } from './configService';
 
 interface PrinterInfo {
   name: string;
@@ -40,7 +40,17 @@ export class HybridBluetoothPrinterService {
 
     nativeBridge.onMessage('BLUETOOTH_CONNECTED', (data) => {
       this.isConnected = data.connected;
-      this.printerInfo = { name: data.device?.name ?? 'Native Bluetooth Printer', address: data.device?.id };
+      const deviceName = data.device?.name ?? 'Native Bluetooth Printer';
+      
+      // Detect width from device name or use settings
+      const detectedWidth = this.detectWidthFromName(deviceName);
+      
+      this.printerInfo = { 
+        name: deviceName, 
+        address: data.device?.id,
+        width: detectedWidth.width,
+        dpi: detectedWidth.dpi
+      };
       
       // Notify UI
       const event = new CustomEvent('bluetoothStatusChange', { 
@@ -85,6 +95,34 @@ export class HybridBluetoothPrinterService {
       const event = new CustomEvent('printProgress', { detail: data });
       window.dispatchEvent(event);
     });
+  }
+
+  private detectWidthFromName(deviceName: string): { width: number; dpi: number } {
+    // Try to detect from device name first
+    const n = deviceName.toLowerCase();
+    
+    // Check for 80mm indicators
+    if (n.includes('80') || n.includes('80mm')) {
+      return { width: 576, dpi: 203 }; // 80mm = 576px at 203 DPI
+    }
+    
+    // Check for known 58mm brands
+    if (n.includes('eppos') || n.includes('epx') || 
+        n.includes('xprinter') || n.includes('xp-p300') ||
+        n.includes('hoin') || n.includes('h58') ||
+        n.includes('bellav') || n.includes('58a') ||
+        n.includes('58') || n.includes('58mm')) {
+      return { width: 384, dpi: 203 }; // 58mm = 384px at 203 DPI
+    }
+    
+    // Fallback to settings
+    const settings = getPrinterSizeSettings();
+    if (settings.thermalSize === '80mm') {
+      return { width: 576, dpi: 203 };
+    }
+    
+    // Default to 58mm
+    return { width: 384, dpi: 203 };
   }
 
   async scanPrinters(): Promise<unknown[]> {

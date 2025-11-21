@@ -1,6 +1,6 @@
 /// <reference types="@types/web-bluetooth" />
 
-import { getPrinterOutputSettings } from './configService';
+import { getPrinterOutputSettings, getPrinterSizeSettings, setPrinterSizeSettings } from './configService';
 
 export interface PrinterConfig {
   name: string;
@@ -205,15 +205,60 @@ export class UniversalBluetoothPrinterService {
   }
 
   private detectPrinterConfig(deviceName: string): PrinterConfig {
+    // Step 1: Check manual settings first - if user manually set, respect that
+    const manualSettings = getPrinterSizeSettings();
+    const hasManualOverride = !manualSettings.autoDetected;
+    
+    // Step 2: Try exact match from PRINTER_CONFIGS
     if (UniversalBluetoothPrinterService.PRINTER_CONFIGS[deviceName]) {
-      return UniversalBluetoothPrinterService.PRINTER_CONFIGS[deviceName];
+      const config = UniversalBluetoothPrinterService.PRINTER_CONFIGS[deviceName];
+      // If no manual override, save auto-detect result
+      if (!hasManualOverride) {
+        setPrinterSizeSettings({
+          thermalSize: config.width >= 500 ? '80mm' : '58mm',
+          width: config.width >= 500 ? 80 : 58,
+          autoDetected: true
+        });
+      }
+      return config;
     }
+    
+    // Step 3: Pattern matching untuk brand/model
     const n = deviceName.toLowerCase();
-    if (n.includes('eppos') || n.includes('epx')) return UniversalBluetoothPrinterService.PRINTER_CONFIGS['EPPOS EPX-58B'];
-    if (n.includes('xprinter') || n.includes('xp-p300')) return UniversalBluetoothPrinterService.PRINTER_CONFIGS['XPRINTER XP-P300'];
-    if (n.includes('hoin') || n.includes('h58')) return UniversalBluetoothPrinterService.PRINTER_CONFIGS['HOIN HOP H58'];
-    if (n.includes('bellav') || n.includes('58a')) return UniversalBluetoothPrinterService.PRINTER_CONFIGS['BellaV EP-58A'];
-    if (n.includes('80')) return UniversalBluetoothPrinterService.PRINTER_CONFIGS['Generic 80mm'];
+    let detectedConfig: PrinterConfig | null = null;
+    
+    if (n.includes('eppos') || n.includes('epx')) {
+      detectedConfig = UniversalBluetoothPrinterService.PRINTER_CONFIGS['EPPOS EPX-58B'];
+    } else if (n.includes('xprinter') || n.includes('xp-p300')) {
+      detectedConfig = UniversalBluetoothPrinterService.PRINTER_CONFIGS['XPRINTER XP-P300'];
+    } else if (n.includes('hoin') || n.includes('h58')) {
+      detectedConfig = UniversalBluetoothPrinterService.PRINTER_CONFIGS['HOIN HOP H58'];
+    } else if (n.includes('bellav') || n.includes('58a')) {
+      detectedConfig = UniversalBluetoothPrinterService.PRINTER_CONFIGS['BellaV EP-58A'];
+    } else if (n.includes('80') || n.includes('80mm')) {
+      detectedConfig = UniversalBluetoothPrinterService.PRINTER_CONFIGS['Generic 80mm'];
+    }
+    
+    // Step 4: If auto-detect berhasil DAN tidak ada manual override, simpan ke settings
+    if (detectedConfig && !hasManualOverride) {
+      setPrinterSizeSettings({
+        thermalSize: detectedConfig.width >= 500 ? '80mm' : '58mm',
+        width: detectedConfig.width >= 500 ? 80 : 58,
+        autoDetected: true
+      });
+      return detectedConfig;
+    }
+    
+    // Step 5: Jika auto-detect gagal atau ada manual override, gunakan manual settings
+    if (hasManualOverride) {
+      // Use manual settings - convert mm to pixels
+      if (manualSettings.thermalSize === '80mm') {
+        return UniversalBluetoothPrinterService.PRINTER_CONFIGS['Generic 80mm'];
+      }
+      return UniversalBluetoothPrinterService.PRINTER_CONFIGS['Generic 58mm'];
+    }
+    
+    // Step 6: Fallback ke 58mm jika tidak ada settings
     return UniversalBluetoothPrinterService.PRINTER_CONFIGS['Generic 58mm'];
   }
 

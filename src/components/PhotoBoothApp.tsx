@@ -7,6 +7,7 @@ import { useWakeLock } from '../hooks/useWakeLock';
 import { generateQRCodeDataURL, getDownloadURL } from '../utils/qrCodeGenerator';
 import { getHybridBluetoothPrinterService, type HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
+import { getPrinterSizeSettings } from '../services/configService';
 
 interface Template {
   id: string;
@@ -509,7 +510,21 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         showNotification('Failed: Photo not found for print', 'error');
         return;
       }
-      await bluetoothPrinter.printImage(printDataURL);
+      
+      // Get width from printerInfo or settings, convert mm to pixels
+      let printWidth: number;
+      const printerInfo = bluetoothPrinter.getPrinterInfo();
+      if (printerInfo?.width) {
+        printWidth = printerInfo.width;
+        console.log('[HANDLE_PRINT] Using width from printerInfo:', printWidth);
+      } else {
+        // Fallback to settings
+        const settings = getPrinterSizeSettings();
+        printWidth = settings.thermalSize === '80mm' ? 576 : 384;
+        console.log('[HANDLE_PRINT] Using width from settings:', printWidth, `(${settings.thermalSize})`);
+      }
+      
+      await bluetoothPrinter.printImage(printDataURL, printWidth);
       console.log('[HANDLE_PRINT] Print command sent');
       if (photoId) {
         if (saveBeforePrint) {

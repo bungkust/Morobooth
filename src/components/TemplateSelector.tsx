@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { getPrinterSizeSettings } from '../services/configService';
 
 interface Template {
   id: string;
@@ -18,46 +19,39 @@ interface TemplateSelectorProps {
   onBack?: () => void;
 }
 
-const templates: Template[] = [
+// Base templates (akan di-adjust berdasarkan settings)
+const baseTemplates: Omit<Template, 'width' | 'thermalSize'>[] = [
   {
     id: 'single-photo',
     name: 'Single Portrait',
     description: '1 large photo in portrait orientation - perfect for individual shots',
-    width: 58,
     height: 80,
     photoCount: 1,
     layout: 'vertical',
-    thermalSize: '58mm'
   },
   {
     id: 'strip-horizontal',
     name: 'Double Strip',
     description: '2 photos stacked vertically - great for couples or friends',
-    width: 58,
     height: 120,
     photoCount: 2,
     layout: 'vertical',
-    thermalSize: '58mm'
   },
   {
     id: 'strip-vertical',
     name: 'Classic Strip',
     description: '3 photos stacked vertically - traditional photo booth style',
-    width: 58,
     height: 180,
     photoCount: 3,
     layout: 'vertical',
-    thermalSize: '58mm'
   },
   {
     id: 'strip-double',
     name: 'Quad Strip',
     description: '4 photos in 2x2 grid - perfect for group photos',
-    width: 58,
     height: 200,
     photoCount: 4,
     layout: 'grid',
-    thermalSize: '58mm'
   }
 ];
 
@@ -65,6 +59,46 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [, setAdminTapCount] = useState<number>(0);
   const adminTapTimeoutRef = useRef<number | null>(null);
+  
+  // Load printer size from settings
+  const [printerSize, setPrinterSize] = useState(getPrinterSizeSettings());
+
+  // Update when settings change
+  useEffect(() => {
+    const updateSize = () => {
+      const newSize = getPrinterSizeSettings();
+      setPrinterSize(newSize);
+      console.log('TemplateSelector: Printer size updated:', newSize);
+    };
+
+    // Check on mount
+    updateSize();
+
+    // Listen for storage changes (if changed in different tab/window)
+    window.addEventListener('storage', updateSize);
+    
+    // Listen for custom event from AdminPage (same window)
+    const handleSettingsChange = () => {
+      updateSize();
+    };
+    window.addEventListener('printerSizeSettingsChanged', handleSettingsChange);
+    
+    // Also check periodically as fallback (reduced to 3 seconds)
+    const interval = setInterval(updateSize, 3000);
+
+    return () => {
+      window.removeEventListener('storage', updateSize);
+      window.removeEventListener('printerSizeSettingsChanged', handleSettingsChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Generate templates based on printer size settings
+  const templates: Template[] = baseTemplates.map(template => ({
+    ...template,
+    width: printerSize.width,
+    thermalSize: printerSize.thermalSize
+  }));
 
   const handleTemplateChange = (templateId: string) => {
     setSelectedTemplateId(templateId);

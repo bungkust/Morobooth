@@ -279,6 +279,59 @@ export function resetPrinterOutputSettings(): void {
   }
 }
 
+// Printer Size Settings
+export interface PrinterSizeSettings {
+  thermalSize: '58mm' | '80mm';
+  width: number; // mm
+  autoDetected?: boolean; // Flag untuk tahu apakah ini hasil auto-detect atau manual
+}
+
+const DEFAULT_PRINTER_SIZE: PrinterSizeSettings = {
+  thermalSize: '58mm',
+  width: 58,
+  autoDetected: false
+};
+
+export function getPrinterSizeSettings(): PrinterSizeSettings {
+  try {
+    const stored = localStorage.getItem('morobooth_printer_size_settings');
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return {
+        thermalSize: parsed.thermalSize === '80mm' ? '80mm' : '58mm',
+        width: parsed.thermalSize === '80mm' ? 80 : 58,
+        autoDetected: parsed.autoDetected ?? false
+      };
+    }
+  } catch (e) {
+    console.error('Failed to load printer size settings:', e);
+  }
+  return DEFAULT_PRINTER_SIZE;
+}
+
+export function setPrinterSizeSettings(settings: PrinterSizeSettings): void {
+  try {
+    const payload = {
+      thermalSize: settings.thermalSize,
+      width: settings.width,
+      autoDetected: settings.autoDetected ?? false
+    };
+    localStorage.setItem('morobooth_printer_size_settings', JSON.stringify(payload));
+    console.log('Printer size settings saved:', payload);
+  } catch (e) {
+    console.error('Failed to save printer size settings:', e);
+    throw new Error('Failed to save printer size settings');
+  }
+}
+
+export function resetPrinterSizeSettings(): void {
+  try {
+    localStorage.removeItem('morobooth_printer_size_settings');
+  } catch (e) {
+    console.error('Failed to reset printer size settings:', e);
+  }
+}
+
 // QR Code Settings
 export interface QRCodeSettings {
   enabled?: boolean; // Show QR code on print

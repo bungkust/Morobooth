@@ -16,8 +16,8 @@ import {
 import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
 import { bulkUploadPhotos, type UploadResult } from '../services/uploadService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings, UploadSettings } from '../services/configService';
-import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS, getUploadSettings, setUploadSettings, resetUploadSettings } from '../services/configService';
+import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings, UploadSettings, PrinterSizeSettings } from '../services/configService';
+import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS, getUploadSettings, setUploadSettings, resetUploadSettings, getPrinterSizeSettings, setPrinterSizeSettings, resetPrinterSizeSettings } from '../services/configService';
 import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
@@ -193,6 +193,13 @@ export const AdminPage = () => {
   const [bundleVersion, setBundleVersion] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   
+  // Printer size settings
+  const [printerSizeSettings, setPrinterSizeSettingsState] = useState<PrinterSizeSettings>({
+    thermalSize: '58mm',
+    width: 58,
+    autoDetected: false
+  });
+  
   // Printer output settings
   const [printerOutputSettings, setPrinterOutputSettingsState] = useState<PrinterOutputSettings>({
     threshold: 165,
@@ -282,6 +289,9 @@ export const AdminPage = () => {
       // Load upload settings
       const savedUploadSettings = getUploadSettings();
       setUploadSettingsState(savedUploadSettings);
+      // Load printer size settings
+      const savedSizeSettings = getPrinterSizeSettings();
+      setPrinterSizeSettingsState(savedSizeSettings);
     }
   }, [authenticated, loadData]);
 
@@ -343,6 +353,11 @@ export const AdminPage = () => {
       if (connected) {
         console.log('AdminPage: Bluetooth connected - showing test print button');
         console.log('AdminPage: Printer info:', event.detail.info);
+        // Update printer size settings if auto-detected
+        const currentSettings = getPrinterSizeSettings();
+        if (currentSettings.autoDetected) {
+          setPrinterSizeSettingsState(currentSettings);
+        }
       } else {
         console.log('AdminPage: Bluetooth disconnected');
       }
@@ -1545,6 +1560,84 @@ export const AdminPage = () => {
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Printer Size Settings Section */}
+              <div className="admin-card" style={{ marginTop: '20px' }}>
+                <div className="card-header">
+                  <h2>Printer Paper Size</h2>
+                </div>
+                <div className="printer-size-section">
+                  <p className="info-text" style={{ marginBottom: '15px' }}>
+                    {printerSizeSettings.autoDetected 
+                      ? `✅ Auto-detected: ${printerSizeSettings.thermalSize} (based on printer name)`
+                      : '⚠️ Could not auto-detect. Please select your printer paper size manually.'}
+                  </p>
+                  
+                  <div className="printer-size-selector" style={{ marginTop: '20px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '15px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="thermalSize"
+                        value="58mm"
+                        checked={printerSizeSettings.thermalSize === '58mm'}
+                        onChange={() => {
+                          const newSettings = { thermalSize: '58mm' as const, width: 58, autoDetected: false };
+                          setPrinterSizeSettingsState(newSettings);
+                        }}
+                        style={{ marginRight: '10px', width: '20px', height: '20px' }}
+                      />
+                      <span style={{ fontSize: '16px' }}>58mm (Standard) - 384 pixels width</span>
+                    </label>
+                    
+                    <label style={{ display: 'flex', alignItems: 'center', marginBottom: '15px', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="thermalSize"
+                        value="80mm"
+                        checked={printerSizeSettings.thermalSize === '80mm'}
+                        onChange={() => {
+                          const newSettings = { thermalSize: '80mm' as const, width: 80, autoDetected: false };
+                          setPrinterSizeSettingsState(newSettings);
+                        }}
+                        style={{ marginRight: '10px', width: '20px', height: '20px' }}
+                      />
+                      <span style={{ fontSize: '16px' }}>80mm (Wide) - 576 pixels width</span>
+                    </label>
+                  </div>
+                  
+                  <div className="printer-size-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => {
+                        setPrinterSizeSettings(printerSizeSettings);
+                        // Dispatch custom event for TemplateSelector
+                        window.dispatchEvent(new CustomEvent('printerSizeSettingsChanged'));
+                        showNotification(`Printer size saved: ${printerSizeSettings.thermalSize}`, 'success');
+                      }}
+                      className="primary-btn"
+                    >
+                      Save Printer Size
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        const defaults = { thermalSize: '58mm' as const, width: 58, autoDetected: false };
+                        setPrinterSizeSettingsState(defaults);
+                        resetPrinterSizeSettings();
+                        window.dispatchEvent(new CustomEvent('printerSizeSettingsChanged'));
+                        showNotification('Printer size reset to default (58mm)', 'success');
+                      }}
+                      className="secondary-btn"
+                    >
+                      Reset to Default
+                    </button>
+                  </div>
+                  
+                  <p className="info-text" style={{ marginTop: '15px', fontSize: '14px', color: '#666' }}>
+                    Current setting: <strong>{printerSizeSettings.thermalSize}</strong> ({printerSizeSettings.width}mm width)
+                    {printerSizeSettings.autoDetected && ' - Auto-detected'}
+                  </p>
+                </div>
               </div>
 
               {/* Printer Output Settings Section */}
