@@ -27,7 +27,6 @@ export async function uploadPhotoToSupabase(photo: PhotoRecord): Promise<UploadR
     const blob = await dataURLtoBlob(photo.imageDataURL);
     // Use folder structure: sessionCode/photoId.png
     const filePath = `${photo.sessionCode}/${photo.id}.png`;
-    const filename = photo.id; // Just the filename without path for display
     
     // Check if file already exists to handle duplicate uploads gracefully
     // List files in the session folder

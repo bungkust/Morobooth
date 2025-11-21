@@ -143,7 +143,9 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
             qrCodeDataURL
           );
           dataURL = printComposite.canvas.toDataURL('image/png');
-          console.log('[COMPOSE_IMAGE_FOR_PRINT] ✓ QR code composed successfully, dataURL length:', dataURL.length);
+          if (dataURL) {
+            console.log('[COMPOSE_IMAGE_FOR_PRINT] ✓ QR code composed successfully, dataURL length:', dataURL.length);
+          }
           } else {
             console.warn('[COMPOSE_IMAGE_FOR_PRINT] P5 instance or frames not available for QR composition', {
               hasP5: !!p5Instance,
