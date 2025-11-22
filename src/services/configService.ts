@@ -208,6 +208,9 @@ export interface PrinterOutputSettings {
   // New: Composition Stage
   compositionDither?: boolean; // Enable/disable Floyd-Steinberg dither (default: true)
   compositionDitherThreshold?: number; // Threshold for composition dither (0-255, default: 128)
+  
+  // New: Date Text
+  showDateText?: boolean; // Enable/disable "MOROBOOTH // date" text on photos (default: true)
 }
 
 export const DEFAULT_PRINTER_OUTPUT: Required<PrinterOutputSettings> = {
@@ -219,7 +222,8 @@ export const DEFAULT_PRINTER_OUTPUT: Required<PrinterOutputSettings> = {
   previewGrayscale: true,
   previewDither: true,
   compositionDither: true,
-  compositionDitherThreshold: 128
+  compositionDitherThreshold: 128,
+  showDateText: true
 };
 
 export function getPrinterOutputSettings(): PrinterOutputSettings {
@@ -238,7 +242,8 @@ export function getPrinterOutputSettings(): PrinterOutputSettings {
         previewGrayscale: parsed.previewGrayscale !== undefined ? parsed.previewGrayscale : DEFAULT_PRINTER_OUTPUT.previewGrayscale,
         previewDither: parsed.previewDither !== undefined ? parsed.previewDither : DEFAULT_PRINTER_OUTPUT.previewDither,
         compositionDither: parsed.compositionDither !== undefined ? parsed.compositionDither : DEFAULT_PRINTER_OUTPUT.compositionDither,
-        compositionDitherThreshold: parsed.compositionDitherThreshold !== undefined ? parsed.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold
+        compositionDitherThreshold: parsed.compositionDitherThreshold !== undefined ? parsed.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold,
+        showDateText: parsed.showDateText !== undefined ? parsed.showDateText : DEFAULT_PRINTER_OUTPUT.showDateText
       };
     }
   } catch (error) {
@@ -261,7 +266,8 @@ export function setPrinterOutputSettings(settings: PrinterOutputSettings): void 
       previewGrayscale: settings.previewGrayscale !== undefined ? settings.previewGrayscale : DEFAULT_PRINTER_OUTPUT.previewGrayscale,
       previewDither: settings.previewDither !== undefined ? settings.previewDither : DEFAULT_PRINTER_OUTPUT.previewDither,
       compositionDither: settings.compositionDither !== undefined ? settings.compositionDither : DEFAULT_PRINTER_OUTPUT.compositionDither,
-      compositionDitherThreshold: settings.compositionDitherThreshold !== undefined ? settings.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold
+      compositionDitherThreshold: settings.compositionDitherThreshold !== undefined ? settings.compositionDitherThreshold : DEFAULT_PRINTER_OUTPUT.compositionDitherThreshold,
+      showDateText: settings.showDateText !== undefined ? settings.showDateText : DEFAULT_PRINTER_OUTPUT.showDateText
     };
     localStorage.setItem('morobooth_printer_output_settings', JSON.stringify(payload));
     console.log('Printer output settings saved:', payload);

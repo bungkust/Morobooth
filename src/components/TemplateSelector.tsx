@@ -142,7 +142,74 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
     };
   }, []);
 
-  const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
+  // Render preview icon based on template type
+  const renderPreviewIcon = (template: Template) => {
+    const iconSize = 80;
+    const gap = 4;
+    
+    if (template.id === 'single-photo') {
+      // Single Portrait → 1 rectangle
+      return (
+        <div className="template-preview-icon">
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${iconSize}px` }} />
+        </div>
+      );
+    } else if (template.id === 'strip-vertical') {
+      // Strip Vertical → 3 stacked rectangles
+      const rectHeight = (iconSize - gap * 2) / 3;
+      return (
+        <div className="template-preview-icon">
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${rectHeight}px`, marginBottom: `${gap}px` }} />
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${rectHeight}px`, marginBottom: `${gap}px` }} />
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${rectHeight}px` }} />
+        </div>
+      );
+    } else if (template.id === 'strip-horizontal') {
+      // Strip Horizontal → 2 stacked rectangles (vertical layout)
+      const rectHeight = (iconSize - gap) / 2;
+      return (
+        <div className="template-preview-icon">
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${rectHeight}px`, marginBottom: `${gap}px` }} />
+          <div className="preview-rectangle" style={{ width: `${iconSize * 0.6}px`, height: `${rectHeight}px` }} />
+        </div>
+      );
+    } else if (template.id === 'strip-double') {
+      // Quad Frame → 4 squares in 2×2 layout
+      const squareSize = (iconSize - gap) / 2;
+      return (
+        <div className="template-preview-icon">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}>
+            <div style={{ display: 'flex', gap: `${gap}px` }}>
+              <div className="preview-rectangle" style={{ width: `${squareSize}px`, height: `${squareSize}px` }} />
+              <div className="preview-rectangle" style={{ width: `${squareSize}px`, height: `${squareSize}px` }} />
+            </div>
+            <div style={{ display: 'flex', gap: `${gap}px` }}>
+              <div className="preview-rectangle" style={{ width: `${squareSize}px`, height: `${squareSize}px` }} />
+              <div className="preview-rectangle" style={{ width: `${squareSize}px`, height: `${squareSize}px` }} />
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Map template IDs to display names as per user requirements
+  const getDisplayName = (template: Template) => {
+    if (template.id === 'single-photo') return 'Single Portrait';
+    if (template.id === 'strip-vertical') return 'Strip Vertical';
+    if (template.id === 'strip-horizontal') return 'Strip Horizontal';
+    if (template.id === 'strip-double') return 'Quad Frame';
+    return template.name;
+  };
+
+  // Order templates for display: Single Portrait, Strip Vertical, Strip Horizontal, Quad Frame
+  const orderedTemplates = [
+    templates.find(t => t.id === 'single-photo'),
+    templates.find(t => t.id === 'strip-vertical'),
+    templates.find(t => t.id === 'strip-horizontal'),
+    templates.find(t => t.id === 'strip-double'),
+  ].filter(Boolean) as Template[];
 
   return (
     <div id="template-selector">
@@ -150,58 +217,44 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
         <h1 onClick={handleAdminSecretTap} style={{ cursor: 'pointer' }}>
           Morobooth
         </h1>
-        <p className="template-subtitle">Choose Your Photo Layout</p>
+        <p className="template-subtitle">Step 1 of 4</p>
         
-        <div className="template-dropdown-container">
-          <label htmlFor="template-select" className="dropdown-label">
-            Select Layout:
-          </label>
-          <select
-            id="template-select"
-            value={selectedTemplateId}
-            onChange={(e) => handleTemplateChange(e.target.value)}
-            className="template-dropdown"
-          >
-            <option value="">-- Choose Template --</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedTemplate && (
-          <div className="template-preview-card">
-            <h3>{selectedTemplate.name}</h3>
-            <p>{selectedTemplate.description}</p>
-            <div className="template-specs">
-              <div className="spec-row">
-                <div className="spec-item">
-                  <span className="spec-label">Photos:</span>
-                  <span className="spec-value">{selectedTemplate.photoCount}</span>
+        <div className="template-grid-container">
+          <div className="template-grid">
+            {orderedTemplates.map((template) => {
+              const isSelected = selectedTemplateId === template.id;
+              return (
+                <div
+                  key={template.id}
+                  className={`template-grid-card ${isSelected ? 'selected' : ''}`}
+                  onClick={() => handleTemplateChange(template.id)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      handleTemplateChange(template.id);
+                    }
+                  }}
+                >
+                  <div className="template-card-icon">
+                    {renderPreviewIcon(template)}
+                  </div>
+                  <div className="template-card-name">
+                    {getDisplayName(template)}
+                  </div>
                 </div>
-                <div className="spec-item">
-                  <span className="spec-label">Layout:</span>
-                  <span className="spec-value">{selectedTemplate.layout}</span>
-                </div>
-              </div>
-              <div className="spec-description">
-                {selectedTemplate.layout === 'vertical' && selectedTemplate.photoCount === 1 && 'Perfect for individual portraits and solo shots'}
-                {selectedTemplate.layout === 'vertical' && selectedTemplate.photoCount > 1 && 'Traditional photo booth style with photos stacked vertically'}
-                {selectedTemplate.layout === 'horizontal' && 'Great for couples, friends, or side-by-side poses'}
-                {selectedTemplate.layout === 'grid' && 'Ideal for group photos and family shots in a neat 2x2 arrangement'}
-              </div>
-            </div>
+              );
+            })}
           </div>
-        )}
+        </div>
 
         <button 
           className="continue-button"
           onClick={handleContinue}
           disabled={!selectedTemplateId}
         >
-          {selectedTemplate ? `Continue with ${selectedTemplate.name}` : 'Select a Template'}
+          Continue
         </button>
       </div>
       {onBack && (

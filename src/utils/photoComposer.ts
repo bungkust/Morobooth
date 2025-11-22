@@ -16,22 +16,25 @@ interface Template {
 /**
  * Compose photos for review mode with smaller dimensions (500x375px)
  */
-export async function composeResultForReview(p: any, frames: any[], template: Template): Promise<any> {
+export async function composeResultForReview(p: any, frames: any[], template: Template, canvasWidth?: number, canvasHeight?: number): Promise<any> {
   console.log('Composing result for review...');
   
-  // Use smaller dimensions for review mode
-  const W = 500; // Same as previewWidth
+  // Use canvas dimensions if provided, otherwise use default
+  // This ensures review composite matches preview canvas size exactly
+  const W = canvasWidth || 500;
+  const H = canvasHeight || W; // Default to square if height not provided
+  
   const margin = 12; // Smaller margin
   const gap = 8; // Smaller gap
   const cellW = W - margin * 2;
   const cellH = cellW; // Rasio 1:1
 
-  let H: number = 0; // Will be calculated per layout
+  let compositeHeight: number = 0; // Will be calculated per layout
   let photoPositions: { x: number; y: number }[] = [];
 
   if (template.layout === 'vertical') {
     // Vertical layout: photos stacked vertically
-    H = margin + (cellH * template.photoCount) + (gap * (template.photoCount - 1)) + margin;
+    compositeHeight = margin + (cellH * template.photoCount) + (gap * (template.photoCount - 1)) + margin;
     
     for (let i = 0; i < template.photoCount; i++) {
       photoPositions.push({
@@ -42,7 +45,7 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
   } else if (template.layout === 'horizontal') {
     // Horizontal layout: photos side by side
     const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
-    H = margin + photoWidth + margin;
+    compositeHeight = margin + photoWidth + margin;
     
     for (let i = 0; i < template.photoCount; i++) {
       photoPositions.push({
@@ -57,7 +60,7 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
     const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
     const photoHeight = photoWidth; // Square photos
     
-    H = margin + (photoHeight * rows) + (gap * (rows - 1)) + margin;
+    compositeHeight = margin + (photoHeight * rows) + (gap * (rows - 1)) + margin;
     
     for (let i = 0; i < template.photoCount; i++) {
       const col = i % cols;
@@ -69,14 +72,20 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
     }
   }
 
+  // Use square canvas (same as preview) to maintain consistent positioning
   const out = p.createGraphics(W, H);
   out.background(255); // Latar putih
   
   // Get composition settings
   const settings = getPrinterOutputSettings();
   
+  // Center the composite content within the square canvas
+  const contentOffsetY = (H - compositeHeight) / 2;
+  
   for (let i = 0; i < template.photoCount; i++) {
     const pos = photoPositions[i];
+    // Adjust Y position to center content vertically
+    const adjustedY = pos.y + contentOffsetY;
     
     // Apply dithering based on settings
     let ditheredFrame: any;
@@ -94,13 +103,13 @@ export async function composeResultForReview(p: any, frames: any[], template: Te
 
     if (template.layout === 'horizontal') {
       const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
-      out.image(ditheredFrame, pos.x, pos.y, photoWidth, photoWidth);
+      out.image(ditheredFrame, pos.x, adjustedY, photoWidth, photoWidth);
     } else if (template.layout === 'grid') {
       const cols = template.photoCount === 4 ? 2 : template.photoCount === 6 ? 3 : 2;
       const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
-      out.image(ditheredFrame, pos.x, pos.y, photoWidth, photoWidth);
+      out.image(ditheredFrame, pos.x, adjustedY, photoWidth, photoWidth);
     } else { // Vertical layout
-      out.image(ditheredFrame, pos.x, pos.y, cellW, cellH);
+      out.image(ditheredFrame, pos.x, adjustedY, cellW, cellH);
     }
   }
 
@@ -281,22 +290,22 @@ export async function composeResult(p: any, frames: any[], template: Template, q
     textCursor += bodyTextHeight;
   }
   
-  // Render date below header (above photos)
-  out.fill(0);
-  out.noStroke();
-  out.textAlign(p.CENTER, p.CENTER);
-  out.textFont('monospace'); 
-  out.textSize(28); // Larger text for print
-  
-  const tgl3 = new Date();
-  const dateStr3 = `${tgl3.getFullYear()}.${(tgl3.getMonth()+1).toString().padStart(2,'0')}.${tgl3.getDate().toString().padStart(2,'0')}`;
-  const dateText = `MOROBOOTH // ${dateStr3}`;
-  
-  const dateY = margin + headerH + 40; // Below header with spacing
-  out.text(dateText, W / 2, dateY);
-  
-  // Get composition settings
+  // Render date below header (above photos) - only if enabled
   const settings = getPrinterOutputSettings();
+  if (settings.showDateText !== false) {
+    out.fill(0);
+    out.noStroke();
+    out.textAlign(p.CENTER, p.CENTER);
+    out.textFont('monospace'); 
+    out.textSize(28); // Larger text for print
+    
+    const tgl3 = new Date();
+    const dateStr3 = `${tgl3.getFullYear()}.${(tgl3.getMonth()+1).toString().padStart(2,'0')}.${tgl3.getDate().toString().padStart(2,'0')}`;
+    const dateText = `MOROBOOTH // ${dateStr3}`;
+    
+    const dateY = margin + headerH + 40; // Below header with spacing
+    out.text(dateText, W / 2, dateY);
+  }
   
   for (let i = 0; i < template.photoCount; i++) {
     const pos = photoPositions[i];

@@ -339,6 +339,70 @@ export async function clearSession() {
   localStorage.removeItem('currentSession');
 }
 
+export async function activateSession(sessionCode: string): Promise<SessionInfo | null> {
+  console.log('[ACTIVATE_SESSION] Activating session:', sessionCode);
+  
+  // Get all sessions to find the one to activate
+  const allSessions = await getAllSessions();
+  const sessionToActivate = allSessions.find(s => s.sessionCode === sessionCode);
+  
+  if (!sessionToActivate) {
+    console.error('[ACTIVATE_SESSION] Session not found:', sessionCode);
+    throw new Error(`Session ${sessionCode} not found`);
+  }
+  
+  // Update Supabase: set all sessions to inactive, then set selected one to active
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      // First, set all sessions to inactive
+      const { error: updateAllError } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({ is_active: false });
+      
+      if (updateAllError) {
+        console.error('[ACTIVATE_SESSION] Supabase update all error:', updateAllError);
+      } else {
+        console.log('[ACTIVATE_SESSION] ✓ All sessions set to inactive');
+      }
+      
+      // Then, set the selected session to active
+      const { error: updateError } = await supabase
+        .from(SESSIONS_TABLE)
+        .update({ is_active: true })
+        .eq('session_code', sessionCode);
+      
+      if (updateError) {
+        console.error('[ACTIVATE_SESSION] Supabase update error:', updateError);
+      } else {
+        console.log('[ACTIVATE_SESSION] ✓ Session activated in Supabase');
+      }
+    } catch (supabaseError) {
+      console.error('[ACTIVATE_SESSION] Supabase exception (non-fatal):', supabaseError);
+    }
+  }
+  
+  // Update IndexedDB
+  try {
+    const db = await getDB();
+    await db.put(SESSION_STORE, sessionToActivate);
+    console.log('[ACTIVATE_SESSION] ✓ Session saved to IndexedDB');
+  } catch (dbError) {
+    console.error('[ACTIVATE_SESSION] IndexedDB error:', dbError);
+    throw new Error('Failed to save session to database');
+  }
+  
+  // Update localStorage
+  try {
+    localStorage.setItem('currentSession', JSON.stringify(sessionToActivate));
+    console.log('[ACTIVATE_SESSION] ✓ Session saved to localStorage');
+  } catch (storageError) {
+    console.warn('[ACTIVATE_SESSION] localStorage error (non-fatal):', storageError);
+  }
+  
+  console.log('[ACTIVATE_SESSION] SUCCESS: Session activated:', sessionCode);
+  return sessionToActivate;
+}
+
 export async function clearAllData() {
   try {
     if (isSupabaseConfigured() && supabase) {

@@ -40,8 +40,9 @@ export interface PhotoBoothRef {
   getFrames: () => p5.Image[];
 }
 
-const PREVIEW_WIDTH = 500;
-const PREVIEW_HEIGHT = 375;
+// Default canvas size (fallback)
+const DEFAULT_PREVIEW_WIDTH = 500;
+const DEFAULT_PREVIEW_HEIGHT = 375;
 const CAPTURE_INTERVAL = 2500; // 2.5 seconds
 const BEEP_INTERVAL = 800; // ms
 const LOG_INTERVAL = 500; // ms
@@ -76,6 +77,10 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
   const retryCountRef = useRef<number>(0);
   const cameraReadyRef = useRef<boolean>(false);
   const shotsNeeded = template.photoCount;
+  const canvasSizeRef = useRef<{ width: number; height: number }>({ 
+    width: DEFAULT_PREVIEW_WIDTH, 
+    height: DEFAULT_PREVIEW_HEIGHT 
+  });
 
   const setup = (p: any, canvasParentRef: Element) => {
     p5InstanceRef.current = p;
@@ -83,16 +88,63 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
     // Initialize audio
     initializeAudio();
     
-    // Create canvas with willReadFrequently for better performance
-    const canvas = p.createCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+    // Calculate canvas size based on container (mepet kanan kiri)
+    const calculateCanvasSize = () => {
+      // Get container element (capture-preview-container)
+      const container = canvasParentRef.parentElement?.parentElement;
+      if (!container) {
+        console.warn('Container not found, using default size');
+        return { width: DEFAULT_PREVIEW_WIDTH, height: DEFAULT_PREVIEW_HEIGHT };
+      }
+      
+      // Get container dimensions
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      
+      // Calculate canvas size to fill container width (mepet kanan kiri)
+      // Maintain 1:1 aspect ratio (kotak/square)
+      let canvasWidth = containerWidth;
+      let canvasHeight = canvasWidth; // Square: height = width
+      
+      // If height exceeds container, scale down to fit
+      if (canvasHeight > containerHeight) {
+        canvasHeight = containerHeight;
+        canvasWidth = canvasHeight; // Square: width = height
+      }
+      
+      // Round to integers
+      canvasWidth = Math.floor(canvasWidth);
+      canvasHeight = Math.floor(canvasHeight);
+      
+      // Minimum size constraints (square)
+      const minSize = 300;
+      if (canvasWidth < minSize) {
+        canvasWidth = minSize;
+        canvasHeight = minSize;
+      }
+      if (canvasHeight < minSize) {
+        canvasHeight = minSize;
+        canvasWidth = minSize;
+      }
+      
+      console.log('Canvas size calculated:', canvasWidth, 'x', canvasHeight, 'from container:', containerWidth, 'x', containerHeight);
+      return { width: canvasWidth, height: canvasHeight };
+    };
+    
+    // Calculate and store canvas size
+    const canvasSize = calculateCanvasSize();
+    canvasSizeRef.current = canvasSize;
+    
+    // Create canvas with calculated size
+    const canvas = p.createCanvas(canvasSize.width, canvasSize.height);
     canvas.parent(canvasParentRef);
     canvas.elt.setAttribute('willReadFrequently', 'true');
     p.pixelDensity(1);
     
-    console.log('Canvas created:', PREVIEW_WIDTH, 'x', PREVIEW_HEIGHT);
+    console.log('Canvas created:', canvasSize.width, 'x', canvasSize.height);
 
-    // Create preview buffer
-    pgPreviewRef.current = p.createGraphics(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+    // Create preview buffer with same size
+    pgPreviewRef.current = p.createGraphics(canvasSize.width, canvasSize.height);
 
     // Reset state to ensure clean start
     framesRef.current = [];
@@ -113,9 +165,9 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
           console.log('Video stream acquired successfully.');
           
           if (videoRef.current) {
-            videoRef.current.size(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+            videoRef.current.size(canvasSizeRef.current.width, canvasSizeRef.current.height);
             videoRef.current.hide();
-            console.log('Video resized to:', PREVIEW_WIDTH, 'x', PREVIEW_HEIGHT);
+            console.log('Video resized to:', canvasSizeRef.current.width, 'x', canvasSizeRef.current.height);
             
             // Reset retry count on success
             retryCountRef.current = 0;
@@ -213,7 +265,7 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       const pgPreview = pgPreviewRef.current;
       
       // 1. Draw video to buffer
-      pgPreview.image(video, 0, 0, PREVIEW_WIDTH, PREVIEW_HEIGHT);
+      pgPreview.image(video, 0, 0, canvasSizeRef.current.width, canvasSizeRef.current.height);
       
       // 2. Grayscale based on settings
       const settings = getPrinterOutputSettings();
@@ -288,7 +340,8 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
         autoCaptureLoop(p);
       }
     } else if (state === 'REVIEW') {
-      // Show final composite scaled to fit canvas
+      // Show final composite with same size and positioning as preview
+      // Composite is already created with same dimensions as canvas, so just draw it directly
       if (finalCompositeRef.current) {
         p.image(finalCompositeRef.current, 0, 0, p.width, p.height);
       }
@@ -346,15 +399,15 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
         console.log('AutoCaptureLoop: Starting photo capture');
         
         // Capture raw image from video using consistent size
-        const rawShot = p.createImage(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+        const rawShot = p.createImage(canvasSizeRef.current.width, canvasSizeRef.current.height);
         rawShot.copy(
           videoRef.current, 
           0, 0, 
-          PREVIEW_WIDTH, 
-          PREVIEW_HEIGHT, 
+          canvasSizeRef.current.width, 
+          canvasSizeRef.current.height, 
           0, 0, 
-          PREVIEW_WIDTH, 
-          PREVIEW_HEIGHT
+          canvasSizeRef.current.width, 
+          canvasSizeRef.current.height
         );
         
         // Convert to grayscale based on settings
@@ -425,8 +478,8 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       .then(async ({ composeResultForReview, composeResult: composeResultHighRes }) => {
         try {
           console.log('[COMPOSE] Starting review composite...');
-          // Create review version (smaller, for display)
-          const compositeReview = await composeResultForReview(p, framesRef.current, template);
+          // Create review version with same canvas size as preview to maintain consistent positioning
+          const compositeReview = await composeResultForReview(p, framesRef.current, template, canvasSizeRef.current.width, canvasSizeRef.current.height);
           finalCompositeRef.current = compositeReview;
           onFinalCompositeUpdate(compositeReview);
           console.log('[COMPOSE] ✓ Review composite complete');
@@ -447,8 +500,8 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
           onCountdownTextUpdate('');
           
           // Keep canvas size fixed for review mode (same as preview)
-          p.resizeCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-          onCanvasResize(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+          p.resizeCanvas(canvasSizeRef.current.width, canvasSizeRef.current.height);
+          onCanvasResize(canvasSizeRef.current.width, canvasSizeRef.current.height);
           onCanvasModeChange(true);
           
           console.log('[COMPOSE] ✓ Composing complete. Ready for review.');
@@ -548,8 +601,8 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
         onFramesUpdate([]);
         onFinalCompositeUpdate(null);
         
-        p5InstanceRef.current.resizeCanvas(PREVIEW_WIDTH, PREVIEW_HEIGHT);
-        onCanvasResize(PREVIEW_WIDTH, PREVIEW_HEIGHT);
+        p5InstanceRef.current.resizeCanvas(canvasSizeRef.current.width, canvasSizeRef.current.height);
+        onCanvasResize(canvasSizeRef.current.width, canvasSizeRef.current.height);
         onCanvasModeChange(false);
         
         onStateChange('PREVIEW');

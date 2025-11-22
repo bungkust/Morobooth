@@ -11,6 +11,7 @@ import {
   getAllSessions, 
   clearSession,
   clearAllData,
+  activateSession,
   type SessionInfo 
 } from '../services/sessionService';
 import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
@@ -180,7 +181,7 @@ export const AdminPage = () => {
   }, [currentSession?.sessionCode]);
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<'session' | 'upload' | 'config' | 'history' | 'bluetooth'>('session');
+  const [activeTab, setActiveTab] = useState<'session' | 'upload' | 'config' | 'printer'>('session');
   
   // Bluetooth states
   const [bluetoothPrinter, setBluetoothPrinter] = useState<HybridBluetoothPrinterService | null>(null);
@@ -445,6 +446,23 @@ export const AdminPage = () => {
     const uploaded = photos.filter(p => p.uploaded).length;
     showNotification(`Session ${sessionCode}: ${photos.length} total photos, ${uploaded} uploaded, ${photos.length - uploaded} pending`, 'info');
   }
+
+  const handleActivateSession = useCallback(async (sessionCode: string) => {
+    try {
+      const activatedSession = await activateSession(sessionCode);
+      if (activatedSession) {
+        setCurrentSession(activatedSession);
+        updateConfigOverride({
+          sessionCode: activatedSession.sessionCode,
+        });
+        await loadData();
+        showNotification(`Session activated: ${sessionCode}`, 'success');
+      }
+    } catch (error) {
+      console.error('Error activating session:', error);
+      showNotification(`Failed to activate session: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    }
+  }, [loadData, updateConfigOverride, showNotification]);
 
   // Config handlers
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -886,6 +904,52 @@ export const AdminPage = () => {
                   <div className="no-session">
                     <p>No active session</p>
                     <p className="subtitle">Create a session below to start taking photos</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Session List Card */}
+              <div className="admin-card">
+                <div className="card-header">
+                  <h2>Session List</h2>
+                </div>
+                {sessions.length === 0 ? (
+                  <div className="no-data">
+                    <p>No sessions yet</p>
+                  </div>
+                ) : (
+                  <div className="sessions-list">
+                    {sessions.slice(0, 10).map(s => {
+                      const isActive = currentSession?.sessionCode === s.sessionCode;
+                      return (
+                        <div key={s.sessionCode} className={`session-item ${isActive ? 'active-session' : ''}`}>
+                          <div className="session-info">
+                            <div className="session-header">
+                              <div className="session-code">{s.sessionCode}</div>
+                              <div className={`session-status ${isActive ? 'active' : 'inactive'}`}>
+                                {isActive ? '🟢 ACTIVE' : '⚪ INACTIVE'}
+                              </div>
+                            </div>
+                            <div className="session-event">{s.eventName}</div>
+                          </div>
+                          <div className="session-stats">
+                            <span className="photo-count">{s.photoCount} photos</span>
+                            <span className="session-date">{new Date(s.createdAt).toLocaleDateString()}</span>
+                          </div>
+                          <div className="session-actions">
+                            <button onClick={() => handleActivateSession(s.sessionCode)} className="primary-btn">
+                              Use This Session
+                            </button>
+                            <button onClick={() => viewSessionPhotos(s.sessionCode)} className="small-btn">
+                              View Photos
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {sessions.length > 10 && (
+                      <div className="more-sessions">... and {sessions.length - 10} more sessions</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1437,51 +1501,7 @@ export const AdminPage = () => {
             </div>
           )}
 
-          {activeTab === 'history' && (
-            <div className="tab-content">
-              <div className="admin-card">
-                <div className="card-header">
-                  <h2>Session History</h2>
-                </div>
-                {sessions.length === 0 ? (
-                  <div className="no-data">
-                    <p>No sessions yet</p>
-                  </div>
-                ) : (
-                  <div className="sessions-list">
-                    {sessions.slice(0, 10).map(s => {
-                      const isActive = currentSession?.sessionCode === s.sessionCode;
-                      return (
-                        <div key={s.sessionCode} className={`session-item ${isActive ? 'active-session' : ''}`}>
-                          <div className="session-info">
-                            <div className="session-header">
-                              <div className="session-code">{s.sessionCode}</div>
-                              <div className={`session-status ${isActive ? 'active' : 'inactive'}`}>
-                                {isActive ? '🟢 ACTIVE' : '⚪ INACTIVE'}
-                              </div>
-                            </div>
-                            <div className="session-event">{s.eventName}</div>
-                          </div>
-                          <div className="session-stats">
-                            <span className="photo-count">{s.photoCount} photos</span>
-                            <span className="session-date">{new Date(s.createdAt).toLocaleDateString()}</span>
-                          </div>
-                          <button onClick={() => viewSessionPhotos(s.sessionCode)} className="small-btn">
-                            View
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {sessions.length > 10 && (
-                      <div className="more-sessions">... and {sessions.length - 10} more sessions</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'bluetooth' && (
+          {activeTab === 'printer' && (
             <div className="tab-content">
               <div className="admin-card">
                 <div className="card-header">
@@ -1854,6 +1874,32 @@ export const AdminPage = () => {
                   {/* Visual Separator */}
                   <div className="settings-separator"></div>
 
+                  {/* Photo Text Settings */}
+                  <div className="filter-section">
+                    <h3>Photo Text Settings</h3>
+                    <div className="setting-group">
+                      <label className="field-label toggle-label">
+                        <span>Show Date Text</span>
+                        <span className="setting-help">(Display "MOROBOOTH // date" text on photos)</span>
+                        <div 
+                          className={`toggle-switch ${printerOutputSettings.showDateText !== false ? 'active' : ''}`}
+                          onClick={() => setPrinterOutputSettingsState({
+                            ...printerOutputSettings,
+                            showDateText: !(printerOutputSettings.showDateText !== false)
+                          })}
+                        >
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </label>
+                      <p className="setting-help note-text">
+                        When enabled, photos will display "MOROBOOTH // YYYY.MM.DD" text below the header.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Visual Separator */}
+                  <div className="settings-separator"></div>
+
                   {/* Print Stage Filters Header */}
                   <h3 className="filter-section-title">Print Stage Filters</h3>
 
@@ -1886,7 +1932,8 @@ export const AdminPage = () => {
                           previewGrayscale: true,
                           previewDither: true,
                           compositionDither: true,
-                          compositionDitherThreshold: 128
+                          compositionDitherThreshold: 128,
+                          showDateText: true
                         };
                         setPrinterOutputSettingsState(defaults);
                         resetPrinterOutputSettings();
@@ -1927,15 +1974,8 @@ export const AdminPage = () => {
             <span className="nav-label">Config</span>
           </button>
           <button 
-            className={`nav-btn ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            <span className="nav-icon">📋</span>
-            <span className="nav-label">History</span>
-          </button>
-          <button 
-            className={`nav-btn ${activeTab === 'bluetooth' ? 'active' : ''}`}
-            onClick={() => setActiveTab('bluetooth')}
+            className={`nav-btn ${activeTab === 'printer' ? 'active' : ''}`}
+            onClick={() => setActiveTab('printer')}
           >
             <span className="nav-icon">🖨️</span>
             <span className="nav-label">Printer</span>

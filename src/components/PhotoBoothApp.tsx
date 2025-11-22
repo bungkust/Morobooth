@@ -611,48 +611,57 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
           </button>
         </div>
       )}
-      <div className="app-header">
-        <h1 className="app-title">MOROBOOTH</h1>
-        <p className="template-info">Layout: {template.name}</p>
-        <p className="app-description">
-          SNAP & PRINT! PRESS START FOR A QUICK<br/>
-          PHOTO SESSION, COUNTDOWN BEGINS IN...<br/>
-          3-2-1-SMILE! {template.photoCount} PHOTOS WILL BE TAKEN<br/>
-          AUTOMATICALLY! READY TO PRINT!
-        </p>
-      </div>
-      
-      <div onClick={handleCanvasClick}>
-        <PhotoBooth
-          ref={photoBoothRef}
-          state={appState}
-          countdownText={countdownText}
-          template={template}
-          onStateChange={handleStateChange}
-          onFramesUpdate={handleFramesUpdate}
-          onFinalCompositeUpdate={handleFinalCompositeUpdate}
-          onCountdownTextUpdate={handleCountdownTextUpdate}
-          onCanvasResize={handleCanvasResize}
-          onCanvasModeChange={handleCanvasModeChange}
-        />
-      </div>
-      
-      <div id="ui-overlay">
-        <Controls
-          state={appState}
-          onStart={handleStart}
-          onRetake={handleRetake}
-          onDownload={handleDownload}
-          onPrint={handlePrint}
-          isNativeApp={isNativeApp}
-          isPrinting={isPrinting}
-          isBluetoothConnected={isBluetoothConnected}
-        />
-      </div>
-      
-      <div className="app-footer">
-        <div className="stars">****</div>
-        <div>THANK YOU FOR SMILING WITH MOROBOOTH</div>
+      {/* Capture Content - Same structure as template selector */}
+      <div className="capture-content">
+        {/* Header */}
+        <h1 className="capture-title">MOROBOOTH</h1>
+        <p className="capture-subtitle">Layout: {template.name}</p>
+        
+        {/* Camera Preview Area - Center like template grid */}
+        <div className="capture-preview-wrapper" onClick={handleCanvasClick}>
+          <div className="capture-preview-container">
+            <PhotoBooth
+              ref={photoBoothRef}
+              state={appState}
+              countdownText={countdownText}
+              template={template}
+              onStateChange={handleStateChange}
+              onFramesUpdate={handleFramesUpdate}
+              onFinalCompositeUpdate={handleFinalCompositeUpdate}
+              onCountdownTextUpdate={handleCountdownTextUpdate}
+              onCanvasResize={handleCanvasResize}
+              onCanvasModeChange={handleCanvasModeChange}
+            />
+            {/* Dynamic Overlay Mask based on template */}
+            {appState === 'PREVIEW' && (
+              <div className={`capture-overlay capture-overlay-${template.id}`}></div>
+            )}
+          </div>
+        </div>
+        
+        {/* Footer Button */}
+        {appState === 'PREVIEW' && (
+          <>
+            <button className="capture-start-button" onClick={handleStart}>
+              START
+            </button>
+            <p className="capture-instruction">Press START when ready</p>
+          </>
+        )}
+        {appState === 'REVIEW' && (
+          <div id="ui-overlay">
+            <Controls
+              state={appState}
+              onStart={handleStart}
+              onRetake={handleRetake}
+              onDownload={handleDownload}
+              onPrint={handlePrint}
+              isNativeApp={isNativeApp}
+              isPrinting={isPrinting}
+              isBluetoothConnected={isBluetoothConnected}
+            />
+          </div>
+        )}
       </div>
       
       <PreviewModal

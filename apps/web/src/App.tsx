@@ -82,7 +82,7 @@ function App() {
   };
 
   return (
-    <div id="app-container">
+    <div id="app-container" className={currentPage === 'photobooth' ? 'capture-screen' : ''}>
       {currentPage === 'permission' && (
         <PermissionPage onPermissionGranted={handlePermissionGranted} />
       )}
