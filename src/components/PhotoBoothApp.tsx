@@ -77,8 +77,10 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     if (!photoBoothRef.current) return null;
     let dataURL: string | null = null;
     
-    // Use provided photoId or get from ref
-    const currentPhotoId = photoId || photoBoothRef.current.getPhotoIdForPrint();
+    // Use provided photoId or get from ref (with safe access)
+    const currentPhotoId = photoId || (photoBoothRef.current?.getPhotoIdForPrint() ?? null);
+    // Fix: Re-check after accessing ref
+    if (!photoBoothRef.current) return null;
     console.log('[COMPOSE_IMAGE_FOR_PRINT] PhotoId:', currentPhotoId || 'none');
     
     // Validate photoId format
@@ -109,6 +111,11 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         
         // Load QR settings from configService
         const { getQRCodeSettings } = await import('../services/configService');
+        // Fix: Re-check after await
+        if (!photoBoothRef.current) {
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] photoBoothRef became null after import');
+          return null;
+        }
         const qrSettings = getQRCodeSettings();
         console.log('[COMPOSE_IMAGE_FOR_PRINT] QR settings:', { enabled: qrSettings.enabled, width: qrSettings.width });
         
@@ -124,34 +131,344 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         }
         
         const qrCodeDataURL = await generateQRCodeDataURL(downloadURL, qrSettings);
+        // Fix: Re-check after await
+        if (!photoBoothRef.current) {
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] photoBoothRef became null after QR generation');
+          return null;
+        }
         console.log('[COMPOSE_IMAGE_FOR_PRINT] QR code generated:', !!qrCodeDataURL, qrCodeDataURL ? `length: ${qrCodeDataURL.length}` : '');
         
-      if (qrCodeDataURL) {
-        const { composeResult } = await import('../utils/photoComposer');
-        const p5Instance = photoBoothRef.current.getP5Instance?.();
-        const frames = photoBoothRef.current.getFrames?.();
-        
-        console.log('[COMPOSE_IMAGE_FOR_PRINT] P5 instance:', !!p5Instance, 'Frames:', frames?.length || 0);
-          
-        if (p5Instance && frames && frames.length > 0) {
-          if (frames.length !== template.photoCount) {
-            console.warn(`[COMPOSE_IMAGE_FOR_PRINT] Frames count mismatch: expected ${template.photoCount}, got ${frames.length}`);
+        // Validate QR code data URL format and length
+        let isValidQRCode = false;
+        if (qrCodeDataURL && typeof qrCodeDataURL === 'string') {
+          // Fix: Check format
+          if (!qrCodeDataURL.startsWith('data:image')) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] Invalid QR code data URL format, skipping QR code:', qrCodeDataURL.substring(0, 50));
           }
+          // Fix: Check length (max 10MB to prevent memory issues)
+          else if (qrCodeDataURL.length > 10 * 1024 * 1024) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] QR code data URL too large:', qrCodeDataURL.length, 'bytes (max 10MB)');
+          } else {
+            isValidQRCode = true;
+          }
+        }
+        
+      if (isValidQRCode) {
+        const { composeResult } = await import('../utils/photoComposer');
+        // Fix: Re-check after await
+        if (!photoBoothRef.current) {
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] photoBoothRef became null after import composeResult');
+          return null;
+        }
+        
+        // FIX 1: Retry mechanism untuk mendapatkan p5Instance dan frames
+        let p5Instance = photoBoothRef.current.getP5Instance?.();
+        let frames = photoBoothRef.current.getFrames?.();
+        
+        // Retry jika tidak tersedia (max 3 kali, delay 100ms)
+        let retries = 0;
+        const maxRetries = 3;
+        // Fix: Check for both too few and too many frames
+        while (retries < maxRetries) {
+          const hasValidFrames = frames && frames.length > 0 && frames.length === template.photoCount;
+          if (p5Instance && frames && hasValidFrames) {
+            break; // Exit early if valid
+          }
+          
+          console.warn(`[COMPOSE_IMAGE_FOR_PRINT] Retry ${retries + 1}/${maxRetries}: Waiting for p5Instance/frames...`, {
+            hasP5: !!p5Instance,
+            framesLength: frames?.length || 0,
+            expectedCount: template.photoCount,
+            isValid: hasValidFrames
+          });
+          await new Promise(resolve => setTimeout(resolve, 100));
+          // Fix: Re-check after await
+          if (!photoBoothRef.current) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] photoBoothRef became null during retry');
+            break;
+          }
+          p5Instance = photoBoothRef.current.getP5Instance?.();
+          frames = photoBoothRef.current.getFrames?.();
+          retries++;
+        }
+        
+        console.log('[COMPOSE_IMAGE_FOR_PRINT] P5 instance:', !!p5Instance, 'Frames:', frames?.length || 0, `(after ${retries} retries)`);
+        
+        // Fix: Re-check p5Instance validity after retry
+        if (p5Instance && typeof p5Instance.createGraphics !== 'function') {
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] p5Instance invalid after retry (missing createGraphics method)');
+          p5Instance = null;
+        }
+          
+        // Check if we have valid frames for normal composition
+        const hasValidFramesForCompose = p5Instance && frames && frames.length > 0 && frames.length === template.photoCount;
+        
+        if (hasValidFramesForCompose) {
+          try {
           const printComposite = await composeResult(
             p5Instance,
             frames,
             template,
             qrCodeDataURL
           );
+            // Fix: Validate printComposite before accessing .canvas
+            if (!printComposite || !printComposite.canvas || typeof printComposite.canvas.toDataURL !== 'function') {
+              throw new Error('Invalid printComposite: missing canvas or toDataURL method');
+            }
           dataURL = printComposite.canvas.toDataURL('image/png');
           if (dataURL) {
             console.log('[COMPOSE_IMAGE_FOR_PRINT] ✓ QR code composed successfully, dataURL length:', dataURL.length);
+          } else {
+              console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ Failed to convert composite to dataURL');
+              // Try alternative method if composeResult succeeded but toDataURL failed
+              dataURL = null;
+            }
+          } catch (composeError) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ Error in composeResult:', composeError);
+            if (composeError instanceof Error) {
+              console.error('[COMPOSE_IMAGE_FOR_PRINT] Error details:', composeError.message, composeError.stack);
+            }
+            // Try alternative method if composeResult fails
+            dataURL = null;
+          }
+        }
+        
+        // If normal composition failed or frames not available, try alternative method
+        if (!dataURL) {
+          // FIX 2: Alternative method - add QR code to existing composite
+          console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ CRITICAL: Cannot compose QR code - missing dependencies', {
+              hasP5: !!p5Instance,
+            framesLength: frames?.length || 0,
+            templatePhotoCount: template.photoCount,
+            appState: appState,
+            photoId: currentPhotoId,
+            retriesAttempted: retries
+          });
+          
+          // Try alternative: load existing composite and add QR code manually
+          // Fix: Re-check before accessing ref
+          if (!photoBoothRef.current) {
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] photoBoothRef became null before alternative method');
+            dataURL = null;
+          } else {
+            let existingComposite = photoBoothRef.current.getFinalCompositeDataURL();
+            
+            // Fix: Validate existingComposite format
+          if (existingComposite && typeof existingComposite === 'string') {
+            if (!existingComposite.startsWith('data:image')) {
+              console.error('[COMPOSE_IMAGE_FOR_PRINT] Invalid existing composite format, not a data URL');
+              existingComposite = null;
+            } else if (existingComposite.length > 50 * 1024 * 1024) { // 50MB limit for existing composite
+              console.error('[COMPOSE_IMAGE_FOR_PRINT] Existing composite too large:', existingComposite.length, 'bytes');
+              existingComposite = null;
+            }
+          }
+          
+          // Fix: Check if p5Instance is still valid before using
+          if (existingComposite && p5Instance && typeof p5Instance.createGraphics === 'function') {
+            console.log('[COMPOSE_IMAGE_FOR_PRINT] Attempting alternative: Add QR to existing composite...');
+            try {
+              // Helper: Load image with timeout (fixed race condition)
+              const loadImageWithTimeout = (src: string, timeoutMs: number = 10000): Promise<p5.Image> => {
+                return new Promise((resolve, reject) => {
+                  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+                  let resolved = false;
+                  
+                  const cleanup = () => {
+                    if (timeoutId) {
+                      clearTimeout(timeoutId);
+                      timeoutId = null;
+                    }
+                  };
+                  
+                  timeoutId = setTimeout(() => {
+                    if (!resolved) {
+                      resolved = true;
+                      cleanup();
+                      reject(new Error(`Image load timeout after ${timeoutMs}ms`));
+                    }
+                  }, timeoutMs);
+                  
+                  p5Instance!.loadImage(src, (img: p5.Image) => {
+                    if (!resolved) {
+                      resolved = true;
+                      cleanup();
+                      if (img) resolve(img);
+                      else reject(new Error('Failed to load image'));
+                    }
+                  }, () => {
+                    if (!resolved) {
+                      resolved = true;
+                      cleanup();
+                      reject(new Error('Failed to load image'));
+                    }
+                  });
+                });
+              };
+              
+              // Load existing image with timeout
+              const existingImg = await loadImageWithTimeout(existingComposite);
+              
+              // Validate dimensions
+              if (!existingImg || existingImg.width <= 0 || existingImg.height <= 0) {
+                throw new Error(`Invalid existing image dimensions: ${existingImg?.width}x${existingImg?.height}`);
+              }
+              
+              // Fix: Validate height to prevent division by zero
+              if (existingImg.height <= 0) {
+                throw new Error(`Invalid existing image height: ${existingImg.height}`);
+              }
+              
+              // Get dimensions - use same calculation as composeResult
+              // Fix: Validate template.width before calculation
+              if (!template.width || template.width <= 0 || !isFinite(template.width)) {
+                throw new Error(`Invalid template width: ${template.width}`);
+              }
+              const W = template.width * 16;
+              
+              // Fix: Validate calculated width (prevent overflow, reasonable max 10000px)
+              if (!isFinite(W) || W <= 0 || W > 10000) {
+                throw new Error(`Invalid calculated width: ${W} (template.width: ${template.width})`);
+              }
+              
+              // Fix aspect ratio: preserve existing image aspect ratio
+              const existingAspectRatio = existingImg.width / existingImg.height;
+              
+              // Fix: Validate aspect ratio (finite, not NaN, not Infinity, > 0)
+              if (!isFinite(existingAspectRatio) || existingAspectRatio <= 0 || isNaN(existingAspectRatio)) {
+                throw new Error(`Invalid aspect ratio: ${existingAspectRatio} (width: ${existingImg.width}, height: ${existingImg.height})`);
+              }
+              
+              const calculatedH = W / existingAspectRatio;
+              // Use existing height as base, but ensure we don't crop
+              const H = Math.max(calculatedH, existingImg.height);
+              
+              // Validate calculated dimensions
+              if (W <= 0 || H <= 0 || !isFinite(W) || !isFinite(H)) {
+                throw new Error(`Invalid calculated dimensions: W=${W}, H=${H}, aspectRatio=${existingAspectRatio}`);
+              }
+              
+              console.log('[COMPOSE_IMAGE_FOR_PRINT] Alternative method - dimensions:', {
+                originalWidth: existingImg.width,
+                originalHeight: existingImg.height,
+                aspectRatio: existingAspectRatio,
+                calculatedW: W,
+                calculatedH: H
+              });
+              
+              // Use same constants as composeResult for consistency
+              const minQrSize = 80;
+              const qrSizePercent = 0.7; // 70% of paper width
+              const textHeight = 50; // Space for "Scan untuk download" + "(Valid 24 jam)"
+              const qrSpacing = 80; // Spacing below photos before QR
+              
+              // Calculate QR size (same as composeResult)
+              const qrSize = Math.max(minQrSize, Math.floor(W * qrSizePercent));
+              
+              // Calculate QR position with bounds checking (same logic as composeResult)
+              const qrX = (W - qrSize) / 2;
+              let qrY = H - qrSize - textHeight - qrSpacing;
+              const textX = W / 2;
+              let textY = qrY + qrSize + 20;
+              
+              // Bounds check - ensure QR and text fit within canvas
+              const textBottom = textY + 30;
+              if (textBottom > H || qrY < 0) {
+                console.warn('[COMPOSE_IMAGE_FOR_PRINT] QR code text would overflow, adjusting position');
+                qrY = Math.max(0, H - qrSize - textHeight - 10);
+                textY = qrY + qrSize + 20;
+              }
+              
+              console.log('[COMPOSE_IMAGE_FOR_PRINT] Alternative method - QR position:', {
+                qrX, qrY, textX, textY,
+                canvasH: H,
+                qrSize,
+                paperWidth: W,
+                qrSizePercent: `${(qrSize / W * 100).toFixed(1)}%`
+              });
+              
+              // Create new graphics
+              const out = p5Instance.createGraphics(W, H);
+              out.background(255);
+              
+              // Draw existing composite - preserve aspect ratio
+              // Calculate draw dimensions to fit within W x H while maintaining aspect ratio
+              // Fix: Validate before division
+              if (existingImg.height <= 0 || H <= 0) {
+                throw new Error(`Invalid dimensions for aspect ratio calculation: imgH=${existingImg.height}, canvasH=${H}`);
+              }
+              const drawAspectRatio = existingImg.width / existingImg.height;
+              const canvasAspectRatio = W / H;
+              
+              // Fix: Validate aspect ratios
+              if (!isFinite(drawAspectRatio) || !isFinite(canvasAspectRatio) || drawAspectRatio <= 0 || canvasAspectRatio <= 0) {
+                throw new Error(`Invalid aspect ratios: drawAspectRatio=${drawAspectRatio}, canvasAspectRatio=${canvasAspectRatio}`);
+              }
+              
+              let drawW = W;
+              let drawH = H;
+              let drawX = 0;
+              let drawY = 0;
+              
+              if (drawAspectRatio > canvasAspectRatio) {
+                // Image is wider - fit to width
+                drawW = W;
+                drawH = W / drawAspectRatio;
+                drawY = (H - drawH) / 2; // Center vertically
+              } else {
+                // Image is taller - fit to height
+                drawH = H;
+                drawW = H * drawAspectRatio;
+                drawX = (W - drawW) / 2; // Center horizontally
+              }
+              
+              out.image(existingImg, drawX, drawY, drawW, drawH);
+              
+              // Load QR code with timeout
+              const qrImg = await loadImageWithTimeout(qrCodeDataURL);
+              
+              if (!qrImg || qrImg.width <= 0 || qrImg.height <= 0) {
+                throw new Error(`Invalid QR image dimensions: ${qrImg?.width}x${qrImg?.height}`);
+              }
+              
+              // Draw QR code
+              out.image(qrImg, qrX, qrY, qrSize, qrSize);
+              
+              // Add instruction text (same as composeResult)
+              out.textSize(18);
+              out.fill(0);
+              out.noStroke();
+              out.textAlign(out.CENTER);
+              out.textFont('monospace'); // Same font as composeResult
+              out.text('Scan untuk download', textX, textY);
+              out.textSize(14);
+              out.text('(Valid 24 jam)', textX, textY + 20);
+              
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              dataURL = (out as any).canvas.toDataURL('image/png');
+              if (dataURL) {
+                console.log('[COMPOSE_IMAGE_FOR_PRINT] ✓ QR code added to existing composite (alternative method), dataURL length:', dataURL.length);
+              } else {
+                console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ Failed to convert alternative composite to dataURL');
+              }
+            } catch (altError) {
+              console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ Alternative method failed:', altError);
+              if (altError instanceof Error) {
+                console.error('[COMPOSE_IMAGE_FOR_PRINT] Alternative error details:', altError.message, altError.stack);
+              }
+              // Don't throw - let it fallback to high-res without QR
+              // Set dataURL to null so it will use fallback
+              dataURL = null;
           }
           } else {
-            console.warn('[COMPOSE_IMAGE_FOR_PRINT] P5 instance or frames not available for QR composition', {
-              hasP5: !!p5Instance,
-              framesLength: frames?.length || 0
+            // No alternative available - log and let fallback handle it
+            console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ Alternative method not available:', {
+              hasExistingComposite: !!existingComposite,
+              hasP5: !!p5Instance
             });
+            dataURL = null;
+          }
+          }
       }
         } else {
           console.warn('[COMPOSE_IMAGE_FOR_PRINT] QR code generation failed, falling back to high-res without QR');
@@ -161,18 +478,24 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         if (error instanceof Error) {
           console.error('[COMPOSE_IMAGE_FOR_PRINT] Error details:', error.message, error.stack);
         }
+      // FIX 3: Jangan silent fallback - user harus tahu QR code tidak bisa ditambahkan
+      console.error('[COMPOSE_IMAGE_FOR_PRINT] ⚠️ WARNING: Printing without QR code due to error above');
         // Fallback to high-res without QR
       }
     } else {
       console.log('[COMPOSE_IMAGE_FOR_PRINT] No photoId available, composing without QR code');
     }
     
+  // FIX 4: Validasi dataURL sebelum return
     if (!dataURL) {
+    if (currentPhotoId) {
+      console.error('[COMPOSE_IMAGE_FOR_PRINT] ❌ CRITICAL: photoId exists but dataURL is null - QR code was not added!');
+    }
       dataURL = photoBoothRef.current.getFinalCompositeDataURL();
       if (!dataURL) {
         console.error('[COMPOSE_IMAGE_FOR_PRINT] getFinalCompositeDataURL returned null');
       } else {
-        console.log('[COMPOSE_IMAGE_FOR_PRINT] Using fallback high-res dataURL, length:', dataURL.length);
+      console.log('[COMPOSE_IMAGE_FOR_PRINT] Using fallback high-res dataURL (without QR code), length:', dataURL.length);
       }
     }
     return dataURL;
@@ -261,23 +584,46 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
 
   const handleCanvasClick = async () => {
     if (appState === 'REVIEW' && photoBoothRef.current) {
+      // Fix: Helper function to reduce code duplication
+      const fallbackToHighRes = () => {
+        const highResDataURL = photoBoothRef.current?.getFinalCompositeDataURL();
+        if (highResDataURL) {
+          setHighResImageDataURL(highResDataURL);
+          setIsModalOpen(true);
+        }
+      };
+      
       const photoId = photoBoothRef.current.getPhotoIdForPrint?.();
       if (photoId) {
         // Generate QR code for download page
         const downloadURL = getDownloadURL(photoId);
         console.log('Download URL for modal:', downloadURL);
         const qrCodeDataURL = await generateQRCodeDataURL(downloadURL);
+        // Fix: Re-check after await
+        if (!photoBoothRef.current) {
+          console.error('photoBoothRef became null after QR generation');
+          fallbackToHighRes();
+          return;
+        }
         console.log('QR Code generated for modal:', !!qrCodeDataURL);
         
         if (qrCodeDataURL) {
           // Compose modal version with QR code
+          try {
           const { composeResult } = await import('../utils/photoComposer');
+          // Fix: Re-check after await
+          if (!photoBoothRef.current) {
+            console.error('photoBoothRef became null after import composeResult');
+            fallbackToHighRes();
+            return;
+          }
           const p5Instance = photoBoothRef.current.getP5Instance?.();
           const frames = photoBoothRef.current.getFrames?.();
           
           console.log('P5 instance for modal:', !!p5Instance, 'Frames:', frames?.length);
           
-          if (p5Instance && frames) {
+            // Fix: Validate frames length matches template
+            if (p5Instance && frames && frames.length === template.photoCount) {
             const modalComposite = await composeResult(
               p5Instance,
               frames,
@@ -285,28 +631,52 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
               qrCodeDataURL
             );
             
-            if (modalComposite) {
+              // Fix: Re-check after await
+              if (!photoBoothRef.current) {
+                console.error('photoBoothRef became null after composeResult');
+                fallbackToHighRes();
+              } else if (modalComposite) {
+                // Fix: Validate modalComposite before accessing .canvas
+                if (!modalComposite.canvas || typeof modalComposite.canvas.toDataURL !== 'function') {
+                  console.error('Invalid modalComposite: missing canvas or toDataURL method');
+                  fallbackToHighRes();
+                } else {
               const modalDataURL = modalComposite.canvas.toDataURL('image/png');
+                  if (modalDataURL) {
               setHighResImageDataURL(modalDataURL);
               setIsModalOpen(true);
               console.log('Modal opened with QR code');
+                  } else {
+                    console.error('Failed to convert modal composite to dataURL');
+                    fallbackToHighRes();
             }
           }
         } else {
-          // Fallback to high-res without QR code
-          const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
-          if (highResDataURL) {
-            setHighResImageDataURL(highResDataURL);
-            setIsModalOpen(true);
-          }
+                console.error('Modal composite is null');
+                fallbackToHighRes();
+              }
+        } else {
+              console.warn('Modal: Invalid p5Instance or frames, falling back to high-res without QR', {
+                hasP5: !!p5Instance,
+                framesLength: frames?.length || 0,
+                expectedCount: template.photoCount
+              });
+              fallbackToHighRes();
+            }
+          } catch (modalError) {
+            console.error('Error composing modal with QR code:', modalError);
+            if (modalError instanceof Error) {
+              console.error('Modal error details:', modalError.message, modalError.stack);
+            }
+            fallbackToHighRes();
         }
       } else {
         // Fallback to high-res without QR code
-        const highResDataURL = photoBoothRef.current.getFinalCompositeDataURL();
-        if (highResDataURL) {
-          setHighResImageDataURL(highResDataURL);
-          setIsModalOpen(true);
+          fallbackToHighRes();
         }
+      } else {
+        // Fallback to high-res without QR code
+        fallbackToHighRes();
       }
     }
   };
@@ -341,6 +711,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     try {
       if (!photoBoothRef.current) {
         console.error('PhotoBooth ref not found');
+        printLockRef.current = false;
+        setIsPrinting(false);
         return;
       }
 
@@ -349,6 +721,8 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       console.log('Print check - isBluetoothConnected:', isBluetoothConnected);
       if (!bluetoothPrinter || !isBluetoothConnected) {
         showNotification('Please connect printer in admin page first', 'error');
+        printLockRef.current = false;
+        setIsPrinting(false);
         return;
       }
 
@@ -364,6 +738,17 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       if (!highResDataURL) {
         console.error('Final composite not found for print');
         showNotification('Failed: Photo not found', 'error');
+        printLockRef.current = false;
+        setIsPrinting(false);
+        return;
+      }
+      
+      // Fix: Validate highResDataURL format
+      if (typeof highResDataURL !== 'string' || !highResDataURL.startsWith('data:image')) {
+        console.error('[HANDLE_PRINT] Invalid highResDataURL format:', highResDataURL?.substring(0, 50));
+        showNotification('Failed: Invalid photo format', 'error');
+        printLockRef.current = false;
+        setIsPrinting(false);
         return;
       }
 
@@ -672,3 +1057,4 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     </>
   );
 };
+
