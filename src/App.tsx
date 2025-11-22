@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { PermissionPage } from './components/PermissionPage';
 import { TemplateSelector } from './components/TemplateSelector';
-import { PhotoBoothApp } from './components/PhotoBoothApp';
-import { AdminPage } from './components/AdminPage';
-import { DownloadPage } from './components/DownloadPage';
 import './App.css';
+
+// Lazy load heavy components (route-based code splitting)
+const PhotoBoothApp = lazy(() => import('./components/PhotoBoothApp').then(m => ({ default: m.PhotoBoothApp })));
+const AdminPage = lazy(() => import('./components/AdminPage').then(m => ({ default: m.AdminPage })));
+const DownloadPage = lazy(() => import('./components/DownloadPage').then(m => ({ default: m.DownloadPage })));
 
 type AppPage = 'permission' | 'template' | 'photobooth' | 'admin' | 'download';
 
@@ -88,6 +90,20 @@ function App() {
     setCurrentPage('template');
   };
 
+  // Loading fallback component for lazy-loaded routes
+  const LoadingFallback = () => (
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'center', 
+      alignItems: 'center', 
+      height: '100vh',
+      fontSize: '18px',
+      color: '#666'
+    }}>
+      Loading...
+    </div>
+  );
+
   return (
     <div id="app-container" className={currentPage === 'photobooth' ? 'capture-screen' : ''}>
       {currentPage === 'permission' && (
@@ -103,13 +119,19 @@ function App() {
         />
       )}
       {currentPage === 'photobooth' && selectedTemplate && (
-        <PhotoBoothApp template={selectedTemplate} onBackToTemplate={handleBackToTemplate} />
+        <Suspense fallback={<LoadingFallback />}>
+          <PhotoBoothApp template={selectedTemplate} onBackToTemplate={handleBackToTemplate} />
+        </Suspense>
       )}
       {currentPage === 'admin' && (
-        <AdminPage />
+        <Suspense fallback={<LoadingFallback />}>
+          <AdminPage />
+        </Suspense>
       )}
       {currentPage === 'download' && (
-        <DownloadPage photoId={photoIdToDownload} />
+        <Suspense fallback={<LoadingFallback />}>
+          <DownloadPage photoId={photoIdToDownload} />
+        </Suspense>
       )}
     </div>
   );

@@ -264,8 +264,12 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       const video = videoRef.current;
       const pgPreview = pgPreviewRef.current;
       
-      // 1. Draw video to buffer
+      // 1. Draw video to buffer with mirroring (like a mirror for natural preview)
+      pgPreview.push();
+      pgPreview.translate(canvasSizeRef.current.width, 0); // Move to right edge
+      pgPreview.scale(-1, 1); // Flip horizontally (mirror effect)
       pgPreview.image(video, 0, 0, canvasSizeRef.current.width, canvasSizeRef.current.height);
+      pgPreview.pop();
       
       // 2. Grayscale based on settings
       const settings = getPrinterOutputSettings();
@@ -341,7 +345,7 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
       }
     } else if (state === 'REVIEW') {
       // Show final composite with same size and positioning as preview
-      // Composite is already created with same dimensions as canvas, so just draw it directly
+      // Composite is already created from mirrored frames, so just draw it directly (no need to mirror again)
       if (finalCompositeRef.current) {
         p.image(finalCompositeRef.current, 0, 0, p.width, p.height);
       }
@@ -410,13 +414,25 @@ export const PhotoBooth = forwardRef<PhotoBoothRef, PhotoBoothProps>(({
           canvasSizeRef.current.height
         );
         
+        // Mirror the captured image (like preview) using a temporary graphics buffer
+        const mirroredShot = p.createGraphics(canvasSizeRef.current.width, canvasSizeRef.current.height);
+        mirroredShot.push();
+        mirroredShot.translate(canvasSizeRef.current.width, 0);
+        mirroredShot.scale(-1, 1);
+        mirroredShot.image(rawShot, 0, 0);
+        mirroredShot.pop();
+        
+        // Convert graphics to image
+        const mirroredImage = p.createImage(canvasSizeRef.current.width, canvasSizeRef.current.height);
+        mirroredImage.copy(mirroredShot, 0, 0, canvasSizeRef.current.width, canvasSizeRef.current.height, 0, 0, canvasSizeRef.current.width, canvasSizeRef.current.height);
+        
         // Convert to grayscale based on settings
         const settings = getPrinterOutputSettings();
         if (settings.captureGrayscale !== false) {
-        rawShot.filter(p.GRAY);
+        mirroredImage.filter(p.GRAY);
         }
         
-        framesRef.current.push(rawShot);
+        framesRef.current.push(mirroredImage);
         lastShotAtRef.current = p.millis();
         onFramesUpdate([...framesRef.current]);
         
