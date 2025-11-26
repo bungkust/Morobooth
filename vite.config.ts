@@ -71,16 +71,18 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
+        // Fix: Ensure proper chunk ordering to prevent p5 initialization errors
         manualChunks(id) {
           // Vendor libraries from node_modules - MUST be checked first
           if (id.includes('node_modules')) {
+            // p5.js MUST be in a single chunk with react-p5 to prevent circular dependency
+            // Keep p5 and react-p5 together to avoid initialization order issues
+            if (id.includes('p5') || id.includes('react-p5')) {
+              return 'p5-vendor';
+            }
             // React core
             if (id.includes('react') || id.includes('react-dom')) {
               return 'react-vendor';
-            }
-            // p5.js (largest library ~500KB) - must be separate
-            if (id.includes('p5') || id.includes('react-p5')) {
-              return 'p5-vendor';
             }
             // Supabase
             if (id.includes('@supabase')) {
@@ -158,6 +160,13 @@ export default defineConfig({
       }
     },
     // Optimize chunk size
-    chunkSizeWarningLimit: 1000
+    chunkSizeWarningLimit: 1000,
+    // Fix: Use esbuild minification (default, more reliable than terser for p5)
+    minify: 'esbuild',
+    // Fix: Ensure proper module format for p5
+    target: 'esnext',
+    modulePreload: {
+      polyfill: true
+    }
   }
 })
