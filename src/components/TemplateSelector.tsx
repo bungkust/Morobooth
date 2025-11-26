@@ -68,10 +68,12 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
     const updateSize = () => {
       const newSize = getPrinterSizeSettings();
       // Fix: Only update and log if size actually changed
+      // Note: Only compare thermalSize and width since templates are generated from these.
+      // autoDetected is metadata and doesn't affect template generation, so changes to it
+      // shouldn't trigger re-renders.
       setPrinterSize((prevSize) => {
         const hasChanged = prevSize.thermalSize !== newSize.thermalSize || 
-                          prevSize.width !== newSize.width ||
-                          prevSize.autoDetected !== newSize.autoDetected;
+                          prevSize.width !== newSize.width;
         if (hasChanged) {
           console.log('TemplateSelector: Printer size updated:', newSize);
           return newSize; // Only update state if changed
