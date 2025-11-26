@@ -67,8 +67,17 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
   useEffect(() => {
     const updateSize = () => {
       const newSize = getPrinterSizeSettings();
-      setPrinterSize(newSize);
-      console.log('TemplateSelector: Printer size updated:', newSize);
+      // Fix: Only update and log if size actually changed
+      setPrinterSize((prevSize) => {
+        const hasChanged = prevSize.thermalSize !== newSize.thermalSize || 
+                          prevSize.width !== newSize.width ||
+                          prevSize.autoDetected !== newSize.autoDetected;
+        if (hasChanged) {
+          console.log('TemplateSelector: Printer size updated:', newSize);
+          return newSize; // Only update state if changed
+        }
+        return prevSize; // Return previous state if unchanged (prevents unnecessary re-render)
+      });
     };
 
     // Check on mount
@@ -83,8 +92,8 @@ export const TemplateSelector: React.FC<TemplateSelectorProps> = ({ onTemplateSe
     };
     window.addEventListener('printerSizeSettingsChanged', handleSettingsChange);
     
-    // Also check periodically as fallback (reduced to 3 seconds)
-    const interval = setInterval(updateSize, 3000);
+    // Also check periodically as fallback (reduced to 5 seconds to reduce spam)
+    const interval = setInterval(updateSize, 5000);
 
     return () => {
       window.removeEventListener('storage', updateSize);

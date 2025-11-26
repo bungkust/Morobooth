@@ -4,6 +4,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  optimizeDeps: {
+    include: ['p5', 'react-p5'],
+    exclude: []
+  },
   plugins: [
     react(),
     VitePWA({
