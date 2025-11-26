@@ -4,10 +4,6 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  optimizeDeps: {
-    include: ['p5', 'react-p5'],
-    exclude: []
-  },
   plugins: [
     react(),
     VitePWA({
@@ -67,114 +63,5 @@ export default defineConfig({
         ]
       }
     })
-  ],
-  build: {
-    rollupOptions: {
-      // Fix: Preserve p5's module structure to prevent circular dependency issues
-      preserveEntrySignatures: 'strict',
-      output: {
-        // Fix: Ensure proper chunk ordering to prevent p5 initialization errors
-        manualChunks(id) {
-          // Vendor libraries from node_modules - MUST be checked first
-          if (id.includes('node_modules')) {
-            // CRITICAL FIX: Don't split p5 - keep it in main bundle to prevent circular dependency
-            // p5 has internal circular dependencies that break when split into separate chunks
-            // Keep p5 and react-p5 in main bundle (return null) to avoid initialization errors
-            if (id.includes('p5') || id.includes('react-p5')) {
-              return null; // Keep in main bundle
-            }
-            // React core
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-vendor';
-            }
-            // Supabase
-            if (id.includes('@supabase')) {
-              return 'supabase-vendor';
-            }
-            // QR Code library
-            if (id.includes('qrcode')) {
-              return 'utils-vendor';
-            }
-            // HTML2Canvas
-            if (id.includes('html2canvas')) {
-              return 'utils-vendor';
-            }
-            // PWA/Workbox
-            if (id.includes('workbox')) {
-              return 'pwa-vendor';
-            }
-            // Other node_modules
-            return 'vendor';
-          }
-          
-          // Split large utils that are used by PhotoBooth (to reduce photobooth chunk size)
-          if (id.includes('/utils/photoComposer')) {
-            return 'utils-photocomposer';
-          }
-          if (id.includes('/utils/dithering')) {
-            return 'utils-dithering';
-          }
-          if (id.includes('/utils/qrCodeGenerator')) {
-            return 'utils-qrcode';
-          }
-          if (id.includes('/utils/')) {
-            return 'utils';
-          }
-          
-          // Split hooks used by PhotoBooth
-          if (id.includes('/hooks/useAudio')) {
-            return 'hooks-audio';
-          }
-          if (id.includes('/hooks/')) {
-            return 'hooks';
-          }
-          
-          // Internal components - split large components
-          if (id.includes('/components/PhotoBooth.tsx') || id.includes('/components/PhotoBooth')) {
-            return 'photobooth';
-          }
-          if (id.includes('/components/PhotoBoothApp.tsx') || id.includes('/components/PhotoBoothApp')) {
-            return 'photobooth-app';
-          }
-          if (id.includes('/components/AdminPage.tsx') || id.includes('/components/AdminPage')) {
-            return 'admin';
-          }
-          if (id.includes('/components/DownloadPage.tsx') || id.includes('/components/DownloadPage')) {
-            return 'download';
-          }
-          
-          // Service modules - group related services
-          if (id.includes('/services/')) {
-            // Supabase-related services
-            if (id.includes('supabase') || id.includes('uploadService') || id.includes('photoStorageService') || id.includes('sessionService')) {
-              return 'supabase-services';
-            }
-            // Bluetooth printer services (used by PhotoBoothApp)
-            if (id.includes('BluetoothPrinter') || id.includes('hybridBluetoothPrinterService') || id.includes('universalBluetoothPrinterService')) {
-              return 'services-bluetooth';
-            }
-            // Other services
-            return 'services';
-          }
-          
-          // Default: keep in main bundle for small modules
-          return null;
-        }
-      }
-    },
-    // Optimize chunk size
-    chunkSizeWarningLimit: 1000,
-    // Fix: Use esbuild minification (default, more reliable than terser for p5)
-    minify: 'esbuild',
-    // Fix: Ensure proper module format for p5
-    target: 'esnext',
-    modulePreload: {
-      polyfill: true
-    },
-    // Fix: Prevent aggressive tree-shaking that might break p5's internal structure
-    commonjsOptions: {
-      include: [/p5/, /react-p5/],
-      transformMixedEsModules: true
-    }
-  }
+  ]
 })

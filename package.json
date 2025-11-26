@@ -13,6 +13,7 @@
     "prepare": "husky install"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.2",
     "@supabase/supabase-js": "^2.76.1",
     "@types/p5": "^1.7.7",
     "html2canvas": "^1.4.1",
@@ -23,6 +24,7 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-p5": "^1.4.1",
+    "react-to-print": "^3.2.0",
     "vite-plugin-pwa": "^1.1.0",
     "workbox-window": "^7.3.0"
   },
