@@ -70,15 +70,18 @@ export default defineConfig({
   ],
   build: {
     rollupOptions: {
+      // Fix: Preserve p5's module structure to prevent circular dependency issues
+      preserveEntrySignatures: 'strict',
       output: {
         // Fix: Ensure proper chunk ordering to prevent p5 initialization errors
         manualChunks(id) {
           // Vendor libraries from node_modules - MUST be checked first
           if (id.includes('node_modules')) {
-            // p5.js MUST be in a single chunk with react-p5 to prevent circular dependency
-            // Keep p5 and react-p5 together to avoid initialization order issues
+            // CRITICAL FIX: Don't split p5 - keep it in main bundle to prevent circular dependency
+            // p5 has internal circular dependencies that break when split into separate chunks
+            // Keep p5 and react-p5 in main bundle (return null) to avoid initialization errors
             if (id.includes('p5') || id.includes('react-p5')) {
-              return 'p5-vendor';
+              return null; // Keep in main bundle
             }
             // React core
             if (id.includes('react') || id.includes('react-dom')) {
@@ -167,6 +170,11 @@ export default defineConfig({
     target: 'esnext',
     modulePreload: {
       polyfill: true
+    },
+    // Fix: Prevent aggressive tree-shaking that might break p5's internal structure
+    commonjsOptions: {
+      include: [/p5/, /react-p5/],
+      transformMixedEsModules: true
     }
   }
 })
