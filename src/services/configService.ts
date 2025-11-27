@@ -372,7 +372,7 @@ export interface QRCodeSettings {
 }
 
 export const DEFAULT_QR_SETTINGS: Required<QRCodeSettings> = {
-  enabled: true, // Default: QR code enabled
+  enabled: false, // Default: QR code disabled
   width: 200,
   margin: 1,
   errorCorrectionLevel: 'M',
