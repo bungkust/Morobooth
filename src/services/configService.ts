@@ -109,8 +109,10 @@ export async function loadConfig(): Promise<Config> {
       cachedConfig = {
         header: {
           mode: 'text',
-          mainText: header.mainText || DEFAULT_HEADER.mainText,
-          subText: header.subText || DEFAULT_HEADER.subText,
+          // Jika override enabled, gunakan nilai yang user set (meskipun kosong)
+          // Jangan fallback ke default karena user sudah disable custom text
+          mainText: header.mainText ?? '',
+          subText: header.subText ?? '',
           imageUrl: ''
         },
         body: normalizeBody(body)
@@ -118,11 +120,29 @@ export async function loadConfig(): Promise<Config> {
       return cachedConfig;
     }
 
-    cachedConfig = { header: { ...DEFAULT_HEADER }, body: { ...DEFAULT_BODY } };
+    // Untuk user pertama kali, default custom text disable (kosong)
+    cachedConfig = { 
+      header: { 
+        mode: 'text',
+        mainText: '',
+        subText: '',
+        imageUrl: ''
+      }, 
+      body: { ...DEFAULT_BODY } 
+    };
     return cachedConfig;
   } catch (error) {
     console.warn('Failed to load config, using defaults:', error);
-    cachedConfig = { header: { ...DEFAULT_HEADER }, body: { ...DEFAULT_BODY } };
+    // Untuk user pertama kali, default custom text disable (kosong)
+    cachedConfig = { 
+      header: { 
+        mode: 'text',
+        mainText: '',
+        subText: '',
+        imageUrl: ''
+      }, 
+      body: { ...DEFAULT_BODY } 
+    };
     return cachedConfig;
   }
 }
@@ -185,7 +205,10 @@ export function getConfigPreview(): string {
     if (override.header.mode === 'image' && override.header.imageUrl) {
       return 'Custom image enabled';
     }
-    return `${override.header.mainText || DEFAULT_HEADER.mainText}\n${override.header.subText || DEFAULT_HEADER.subText}`;
+    // Jika text kosong, tampilkan "(empty)" untuk preview
+    const mainText = override.header.mainText?.trim() || '(empty)';
+    const subText = override.header.subText?.trim() || '(empty)';
+    return `${mainText}\n${subText}`;
   }
   return 'Using config.txt values';
 }

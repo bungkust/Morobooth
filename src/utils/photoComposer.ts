@@ -190,9 +190,11 @@ export async function composeResult(p: any, frames: any[], template: Template, q
 
   let H: number = 0; // Will be calculated per layout
   let photoPositions: { x: number; y: number }[] = [];
+  let photoWidth = cellW; // Default untuk vertical layout
 
   if (template.layout === 'vertical') {
     // Vertical layout: photos stacked vertically
+    photoWidth = cellW; // W - margin * 2
     H = margin + headerH + 40 + (cellH * template.photoCount) + (gap * (template.photoCount - 1)) + qrSpace + margin;
     
     for (let i = 0; i < template.photoCount; i++) {
@@ -203,7 +205,7 @@ export async function composeResult(p: any, frames: any[], template: Template, q
     }
   } else if (template.layout === 'horizontal') {
     // Horizontal layout: photos side by side
-    const photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
+    photoWidth = (W - margin * 2 - gap * (template.photoCount - 1)) / template.photoCount;
     H = margin + headerH + 40 + photoWidth + qrSpace + margin;
     
     for (let i = 0; i < template.photoCount; i++) {
@@ -216,7 +218,7 @@ export async function composeResult(p: any, frames: any[], template: Template, q
     // Grid layout: photos in grid (2x2 for 4 photos, etc.)
     const cols = template.photoCount === 4 ? 2 : template.photoCount === 6 ? 3 : 2;
     const rows = Math.ceil(template.photoCount / cols);
-    const photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
+    photoWidth = (W - margin * 2 - gap * (cols - 1)) / cols;
     const photoHeight = photoWidth; // Square photos
     
     H = margin + headerH + 40 + (photoHeight * rows) + (gap * (rows - 1)) + qrSpace + margin;
@@ -236,16 +238,18 @@ export async function composeResult(p: any, frames: any[], template: Template, q
   
   // Render custom header image if provided
   if (headerImage) {
-    const availableWidth = W - margin * 2;
-    let drawWidth = availableWidth;
+    // Gunakan lebar yang sama dengan photo width
+    let drawWidth = photoWidth;
     let drawHeight = imageHeaderHeight;
     const aspectRatio = headerImage.width / headerImage.height || 1;
+    // Maintain aspect ratio, tapi jangan melebihi photoWidth
     if (drawWidth / drawHeight > aspectRatio) {
       drawWidth = drawHeight * aspectRatio;
     } else {
       drawHeight = drawWidth / aspectRatio;
     }
-    const imageX = (W - drawWidth) / 2;
+    // Center secara horizontal (sama seperti photo)
+    const imageX = margin + (photoWidth - drawWidth) / 2;
     out.image(headerImage, imageX, margin, drawWidth, drawHeight);
     headerImageDrawHeight = drawHeight;
   }
