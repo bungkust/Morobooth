@@ -18,18 +18,6 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   const [, setAdminTapCount] = useState<number>(0);
   const adminTapTimeoutRef = useRef<number | null>(null);
 
-  // Check camera permission on mount
-  useEffect(() => {
-    checkCameraPermission();
-    
-    // Cleanup admin tap timeout on unmount
-    return () => {
-      if (adminTapTimeoutRef.current) {
-        window.clearTimeout(adminTapTimeoutRef.current);
-      }
-    };
-  }, []);
-
   const checkCameraPermission = async () => {
     try {
       const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
@@ -43,11 +31,24 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
       }
       
       setIsChecking(false);
-    } catch (err) {
+    } catch {
       console.log('Permission API not supported, will request manually');
       setIsChecking(false);
     }
   };
+
+  // Check camera permission on mount
+  useEffect(() => {
+    checkCameraPermission();
+    
+    // Cleanup admin tap timeout on unmount
+    return () => {
+      if (adminTapTimeoutRef.current) {
+        window.clearTimeout(adminTapTimeoutRef.current);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRequestPermission = async () => {
     setIsLoading(true);
@@ -65,17 +66,18 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
       
       stream.getTracks().forEach(track => track.stop());
       onPermissionGranted();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to initialize:', err);
       
       // User-friendly error messages
       let errorMessage = 'Camera access denied. ';
       
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      const error = err as DOMException;
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
         errorMessage += 'Please allow camera access in your browser settings, then refresh the page.';
-      } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
         errorMessage += 'Camera not found. Make sure the camera is connected and not being used by another app.';
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
         errorMessage += 'Camera is being used by another app. Close other apps using the camera, then try again.';
       } else {
         errorMessage += 'Please refresh the page and try again.';
@@ -114,6 +116,14 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
     return (
       <div id="permission-gate">
         <div className="permission-content">
+          <div className="permission-icon">
+            <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="20" y="30" width="80" height="60" rx="8" stroke="currentColor" strokeWidth="4" fill="none"/>
+              <circle cx="60" cy="60" r="15" stroke="currentColor" strokeWidth="4" fill="none"/>
+              <circle cx="60" cy="60" r="8" fill="currentColor"/>
+              <rect x="30" y="20" width="20" height="15" rx="3" fill="currentColor"/>
+            </svg>
+          </div>
           <h1>Morobooth</h1>
           <p>Checking camera permission...</p>
           <div className="loading-spinner"></div>
@@ -125,10 +135,18 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   return (
     <div id="permission-gate">
       <div className="permission-content">
-          <h1 onClick={handleAdminSecretTap} style={{ cursor: 'pointer' }}>
-            Morobooth
-          </h1>
-          <p>Allow camera access to start your photo session.</p>
+        <div className="permission-icon">
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="30" width="80" height="60" rx="8" stroke="currentColor" strokeWidth="4" fill="none"/>
+            <circle cx="60" cy="60" r="15" stroke="currentColor" strokeWidth="4" fill="none"/>
+            <circle cx="60" cy="60" r="8" fill="currentColor"/>
+            <rect x="30" y="20" width="20" height="15" rx="3" fill="currentColor"/>
+          </svg>
+        </div>
+        <h1 onClick={handleAdminSecretTap} style={{ cursor: 'pointer' }}>
+          Morobooth
+        </h1>
+        <p>Allow camera access to start your photo session.</p>
         <button 
           id="permissionBtn" 
           onClick={handleRequestPermission}

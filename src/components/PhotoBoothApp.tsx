@@ -1026,26 +1026,29 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
         
         {/* Footer Button */}
         {appState === 'PREVIEW' && (
-          <>
+          <div id="ui-overlay">
             <button className="capture-start-button" onClick={handleStart}>
               START
             </button>
             <p className="capture-instruction">Press START when ready</p>
-          </>
+          </div>
         )}
         {appState === 'REVIEW' && (
-          <div id="ui-overlay">
-            <Controls
-              state={appState}
-              onStart={handleStart}
-              onRetake={handleRetake}
-              onDownload={handleDownload}
-              onPrint={handlePrint}
-              isNativeApp={isNativeApp}
-              isPrinting={isPrinting}
-              isBluetoothConnected={isBluetoothConnected}
-            />
-          </div>
+          <>
+            <p className="review-tap-hint">TAP TO PREVIEW</p>
+            <div id="ui-overlay">
+              <Controls
+                state={appState}
+                onStart={handleStart}
+                onRetake={handleRetake}
+                onDownload={handleDownload}
+                onPrint={handlePrint}
+                isNativeApp={isNativeApp}
+                isPrinting={isPrinting}
+                isBluetoothConnected={isBluetoothConnected}
+              />
+            </div>
+          </>
         )}
       </div>
       

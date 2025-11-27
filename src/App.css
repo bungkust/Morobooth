@@ -131,6 +131,13 @@ html, body {
   padding-bottom: max(20px, env(safe-area-inset-bottom));
   padding-left: max(20px, env(safe-area-inset-left));
   padding-right: max(20px, env(safe-area-inset-right));
+  background: var(--c-white);
+  background-image: 
+    radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+  background-size: 40px 40px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 10px 10px;
 }
 
 /* Capture Screen - Same structure as Template Selector */
@@ -138,7 +145,7 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   width: 100%;
   height: 100vh;
   position: relative;
@@ -149,6 +156,13 @@ html, body {
   padding-bottom: max(var(--spacing-md), env(safe-area-inset-bottom));
   padding-left: max(var(--spacing-md), env(safe-area-inset-left));
   padding-right: max(var(--spacing-md), env(safe-area-inset-right));
+  background: var(--c-white);
+  background-image: 
+    radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+  background-size: 40px 40px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 10px 10px;
 }
 
 /* App Header */
@@ -192,10 +206,27 @@ html, body {
   width: 100%;
   /* Responsif padding berdasarkan ukuran layar */
   padding: clamp(var(--spacing-sm), 2vw, var(--spacing-lg));
+  padding-bottom: clamp(120px, 20vh, 180px); /* Space untuk button di bawah */
   box-sizing: border-box;
-  /* Minimum dan maximum height untuk responsif */
-  min-height: fit-content;
-  max-height: 100vh;
+  /* Fill available space */
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  gap: var(--spacing-md);
+}
+
+/* Konten utama (title, subtitle, preview) - akan di tengah */
+.capture-content > .capture-title,
+.capture-content > .capture-subtitle,
+.capture-content > .capture-preview-wrapper {
+  flex-shrink: 0;
+}
+
+/* Review tap hint */
+.capture-content > .review-tap-hint {
+  flex-shrink: 0;
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
 }
 
 .capture-title {
@@ -234,12 +265,74 @@ html, body {
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow: visible; /* Changed to visible untuk frame renda */
   margin: 0;
-  padding: 0;
+  padding: clamp(14px, 3.5vw, 18px); /* Padding untuk frame renda */
   box-sizing: border-box;
   /* Fix position - no changes between preview, capture, and review */
   flex-shrink: 0;
+  background: var(--c-white);
+}
+
+/* Frame renda dengan scalloped border pattern */
+.capture-preview-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--c-white);
+  border-radius: var(--radius-lg);
+  z-index: 1;
+  pointer-events: none;
+  /* Scalloped edge menggunakan clip-path untuk efek renda */
+  clip-path: polygon(
+    0% clamp(12px, 3vw, 16px),
+    clamp(6px, 1.5vw, 8px) clamp(6px, 1.5vw, 8px),
+    clamp(12px, 3vw, 16px) 0%,
+    clamp(18px, 4.5vw, 24px) clamp(6px, 1.5vw, 8px),
+    clamp(24px, 6vw, 32px) 0%,
+    calc(100% - clamp(24px, 6vw, 32px)) 0%,
+    calc(100% - clamp(18px, 4.5vw, 24px)) clamp(6px, 1.5vw, 8px),
+    calc(100% - clamp(12px, 3vw, 16px)) 0%,
+    calc(100% - clamp(6px, 1.5vw, 8px)) clamp(6px, 1.5vw, 8px),
+    100% clamp(12px, 3vw, 16px),
+    100% calc(100% - clamp(12px, 3vw, 16px)),
+    calc(100% - clamp(6px, 1.5vw, 8px)) calc(100% - clamp(6px, 1.5vw, 8px)),
+    calc(100% - clamp(12px, 3vw, 16px)) 100%,
+    calc(100% - clamp(18px, 4.5vw, 24px)) calc(100% - clamp(6px, 1.5vw, 8px)),
+    calc(100% - clamp(24px, 6vw, 32px)) 100%,
+    clamp(24px, 6vw, 32px) 100%,
+    clamp(18px, 4.5vw, 24px) calc(100% - clamp(6px, 1.5vw, 8px)),
+    clamp(12px, 3vw, 16px) 100%,
+    clamp(6px, 1.5vw, 8px) calc(100% - clamp(6px, 1.5vw, 8px)),
+    0% calc(100% - clamp(12px, 3vw, 16px))
+  );
+}
+
+/* Border hitam dengan pattern renda */
+.capture-preview-container::after {
+  content: '';
+  position: absolute;
+  top: clamp(-2px, -0.5vw, -1px);
+  left: clamp(-2px, -0.5vw, -1px);
+  right: clamp(-2px, -0.5vw, -1px);
+  bottom: clamp(-2px, -0.5vw, -1px);
+  border: clamp(3px, 0.8vw, 4px) solid var(--c-black);
+  border-radius: var(--radius-lg);
+  z-index: 0;
+  pointer-events: none;
+  /* Pattern renda dengan SVG - dots dan garis melengkung */
+  background-image: url("data:image/svg+xml,%3Csvg width='30' height='30' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='lacePattern' x='0' y='0' width='30' height='30' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='5' cy='5' r='1.5' fill='%23000'/%3E%3Ccircle cx='15' cy='15' r='1.5' fill='%23000'/%3E%3Ccircle cx='25' cy='5' r='1.5' fill='%23000'/%3E%3Cpath d='M 0,10 Q 7.5,7 15,10 T 30,10' stroke='%23000' stroke-width='1' fill='none'/%3E%3Cpath d='M 0,20 Q 7.5,17 15,20 T 30,20' stroke='%23000' stroke-width='1' fill='none'/%3E%3C/pattern%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='url(%23lacePattern)' opacity='0.4'/%3E%3C/svg%3E");
+  background-size: clamp(20px, 5vw, 30px) clamp(20px, 5vw, 30px);
+  background-position: 0 0;
+  /* Mask untuk pattern hanya di border */
+  mask-image: 
+    linear-gradient(to right, transparent 0%, black clamp(3px, 0.8vw, 4px), black calc(100% - clamp(3px, 0.8vw, 4px)), transparent 100%),
+    linear-gradient(to bottom, transparent 0%, black clamp(3px, 0.8vw, 4px), black calc(100% - clamp(3px, 0.8vw, 4px)), transparent 100%);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
 }
 
 /* Canvas inside capture preview container - Fixed sizing for all modes */
@@ -248,7 +341,7 @@ html, body {
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  border: none;
+  border: clamp(2px, 0.5vw, 3px) solid var(--c-black);
   background: transparent;
   margin: 0;
   padding: 0;
@@ -258,6 +351,13 @@ html, body {
   justify-content: center;
   position: relative;
   box-sizing: border-box;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  z-index: 2;
+  /* Inner border dengan shadow untuk efek kedalaman */
+  box-shadow: 
+    inset 0 0 0 clamp(1px, 0.3vw, 2px) rgba(0, 0, 0, 0.1),
+    0 0 0 clamp(1px, 0.3vw, 2px) var(--c-white);
   /* Fix position - same for preview, capture, and review */
   flex-shrink: 0;
 }
@@ -266,7 +366,7 @@ html, body {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover !important;
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   display: block;
   margin: 0;
   padding: 0;
@@ -288,6 +388,13 @@ html, body {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  border: clamp(2px, 0.5vw, 3px) solid var(--c-black);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  z-index: 2;
+  box-shadow: 
+    inset 0 0 0 clamp(1px, 0.3vw, 2px) rgba(0, 0, 0, 0.1),
+    0 0 0 clamp(1px, 0.3vw, 2px) var(--c-white);
   /* Fix position - same as preview */
   flex-shrink: 0;
 }
@@ -298,6 +405,7 @@ html, body {
   height: 100% !important;
   margin: 0;
   padding: 0;
+  border-radius: var(--radius-md);
   /* Fix position - same as preview */
   flex-shrink: 0;
 }
@@ -380,6 +488,16 @@ html, body {
   text-align: center;
 }
 
+.review-tap-hint {
+  font-size: var(--font-3xl);
+  color: var(--c-black);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+  text-align: center;
+  font-weight: bold;
+  opacity: 0.8;
+}
+
 /* 1. Permission Gate */
 #permission-gate {
   position: fixed;
@@ -395,6 +513,12 @@ html, body {
   padding: var(--spacing-md);
   margin: 0;
   background: var(--c-white);
+  background-image: 
+    radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+  background-size: 40px 40px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 10px 10px;
   z-index: 1000;
   box-sizing: border-box;
 }
@@ -406,8 +530,28 @@ html, body {
   text-align: center;
   max-width: var(--container-sm);
   width: 100%;
-  padding: var(--spacing-md);
+  padding: var(--spacing-xl);
   box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.95);
+  border: var(--border-lg) solid var(--c-black);
+  box-shadow: var(--shadow-lg) var(--c-black);
+  border-radius: var(--radius-lg);
+}
+
+.permission-icon {
+  margin-bottom: var(--spacing-xl);
+  color: var(--c-black);
+  opacity: 0.9;
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 #permission-gate h1 {
@@ -461,6 +605,12 @@ html, body {
   padding: var(--spacing-md);
   margin: 0;
   background: var(--c-white);
+  background-image: 
+    radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+  background-size: 40px 40px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 10px 10px;
   z-index: 1000;
   box-sizing: border-box;
   overflow-y: auto;
@@ -790,8 +940,21 @@ canvas {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-top: 20px;
+  position: absolute;
+  bottom: clamp(20px, 5vh, 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: clamp(90%, 85vw, 75%);
   pointer-events: auto;
+  flex-shrink: 0;
+}
+
+#ui-overlay .capture-instruction {
+  font-size: var(--font-sm);
+  color: #666;
+  margin-top: var(--spacing-sm);
+  text-align: center;
 }
 
 #countdown-display {
@@ -983,6 +1146,45 @@ button:disabled {
     margin-bottom: var(--spacing-lg);
   }
   
+  /* Frame renda responsive untuk mobile */
+  .capture-preview-container {
+    padding: 10px;
+  }
+  
+  .capture-preview-container::before {
+    clip-path: polygon(
+      0% 10px,
+      4px 4px,
+      10px 0%,
+      16px 4px,
+      22px 0%,
+      calc(100% - 22px) 0%,
+      calc(100% - 16px) 4px,
+      calc(100% - 10px) 0%,
+      calc(100% - 4px) 4px,
+      100% 10px,
+      100% calc(100% - 10px),
+      calc(100% - 4px) calc(100% - 4px),
+      calc(100% - 10px) 100%,
+      calc(100% - 16px) calc(100% - 4px),
+      calc(100% - 22px) 100%,
+      22px 100%,
+      16px calc(100% - 4px),
+      10px 100%,
+      4px calc(100% - 4px),
+      0% calc(100% - 10px)
+    );
+  }
+  
+  .capture-preview-container::after {
+    border-width: 3px;
+    background-size: 18px 18px;
+  }
+  
+  .capture-preview-container #canvas-wrap {
+    border-width: 2px;
+  }
+  
   .capture-start-button {
     font-size: 28px;
     padding: 16px 32px;
@@ -994,6 +1196,12 @@ button:disabled {
   .capture-instruction {
     font-size: 12px;
     margin-top: 8px;
+  }
+  
+  .review-tap-hint {
+    font-size: var(--font-3xl);
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
   }
   
   /* Controls responsive */
@@ -1081,6 +1289,20 @@ button:disabled {
     margin-bottom: var(--spacing-xl);
   }
   
+  /* Frame renda responsive untuk tablet */
+  .capture-preview-container {
+    padding: 12px;
+  }
+  
+  .capture-preview-container::after {
+    border-width: 3.5px;
+    background-size: 24px 24px;
+  }
+  
+  .capture-preview-container #canvas-wrap {
+    border-width: 2.5px;
+  }
+  
   .capture-start-button {
     font-size: 30px;
     padding: 18px 36px;
@@ -1092,6 +1314,12 @@ button:disabled {
   .capture-instruction {
     font-size: 13px;
     margin-top: 10px;
+  }
+  
+  .review-tap-hint {
+    font-size: var(--font-3xl);
+    margin-top: var(--spacing-md);
+    margin-bottom: var(--spacing-sm);
   }
   
   .controls {
@@ -1207,6 +1435,12 @@ button:disabled {
   .capture-instruction {
     font-size: var(--font-xs);
     margin-top: clamp(4px, 0.5vh, 8px);
+  }
+  
+  .review-tap-hint {
+    font-size: var(--font-3xl);
+    margin-top: clamp(8px, 1vh, 12px);
+    margin-bottom: clamp(4px, 0.5vh, 8px);
   }
 }
 
@@ -1625,6 +1859,15 @@ button:disabled {
     padding: 16px;
   }
   
+  .permission-icon {
+    margin-bottom: var(--spacing-lg);
+  }
+  
+  .permission-icon svg {
+    width: 80px;
+    height: 80px;
+  }
+  
   .permission-content h1 {
     font-size: 32px;
     margin-bottom: 20px;
@@ -1655,6 +1898,15 @@ button:disabled {
 @media (min-width: 481px) and (max-width: 768px) {
   .permission-content {
     padding: 24px;
+  }
+  
+  .permission-icon {
+    margin-bottom: var(--spacing-xl);
+  }
+  
+  .permission-icon svg {
+    width: 100px;
+    height: 100px;
   }
   
   .permission-content h1 {
@@ -3304,6 +3556,12 @@ button:disabled {
   align-items: center;
   justify-content: center;
   background: var(--c-white);
+  background-image: 
+    radial-gradient(circle, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%),
+    linear-gradient(-45deg, rgba(0, 0, 0, 0.02) 25%, transparent 25%, transparent 75%, rgba(0, 0, 0, 0.02) 75%);
+  background-size: 40px 40px, 20px 20px, 20px 20px;
+  background-position: 0 0, 0 0, 10px 10px;
   padding: 0;
   margin: 0;
   z-index: 1000;
