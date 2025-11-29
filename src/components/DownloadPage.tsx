@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getPhotoById } from '../services/photoStorageService';
 import { getFreshSignedUrl } from '../services/uploadService';
 import { getSessionByCode, getDefaultSessionSettings } from '../services/sessionService';
@@ -16,24 +16,16 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
   const [isLocalOnly, setIsLocalOnly] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [signedUrlCache, setSignedUrlCache] = useState<{ url: string; expiry: number } | null>(null);
+  const isLoadingRef = useRef(false); // Guard to prevent concurrent loads
 
-  useEffect(() => {
-    // Monitor online/offline status
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
+  const loadPhoto = useCallback(async () => {
+    // Prevent concurrent loads
+    if (isLoadingRef.current) {
+      console.log('[DownloadPage] Load already in progress, skipping...');
+      return;
+    }
     
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    loadPhoto();
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [photoId]);
-
-  async function loadPhoto() {
+    isLoadingRef.current = true;
     try {
       setLoading(true);
       setError('');
@@ -350,8 +342,26 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
       });
       setError(`Failed to load photo: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
       setLoading(false);
+    } finally {
+      isLoadingRef.current = false;
     }
-  }
+  }, [photoId, isOnline]); // Dependencies: photoId and isOnline. signedUrlCache is only read, not used as input
+
+  useEffect(() => {
+    // Monitor online/offline status
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    loadPhoto();
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [loadPhoto]); // loadPhoto is memoized with useCallback, so this will re-run when dependencies change
 
   async function uploadPhotoOnDemand(photoId: string) {
     if (!isOnline) {
@@ -391,13 +401,44 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
     }
   }
 
-  function handleDownload() {
+  async function handleDownload() {
     if (!downloadUrl) return;
     
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = `${photoId}.png`;
-    link.click();
+    try {
+      // For cross-origin URLs (like Supabase signed URLs), we need to fetch as blob first
+      // This ensures the download actually triggers instead of opening in a new tab
+      const response = await fetch(downloadUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch photo: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${photoId}.png`;
+      document.body.appendChild(link);
+      link.click();
+      
+      // Cleanup
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error('[DownloadPage] Download failed:', err);
+      // Fallback: try direct download (may open in new tab for cross-origin)
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${photoId}.png`;
+      link.target = '_blank'; // Open in new tab as fallback
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Show error message
+      setError(`Download failed. Please try right-clicking the image and selecting "Save image as..."`);
+    }
   }
 
   if (loading) {
