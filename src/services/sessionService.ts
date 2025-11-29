@@ -2,11 +2,27 @@ import { openDB } from 'idb';
 import { nanoid } from 'nanoid';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 
+export interface SessionSettings {
+  // Expired settings
+  photoExpiredHours: number; // Default: 24
+  enableExpiredCheck: boolean; // Default: true
+  
+  // Delete settings
+  autoDeleteDays: number; // Default: 30 (untuk database records)
+  storageDeleteDays: number; // Default: 5 (untuk storage files)
+  enableAutoDelete: boolean; // Default: true
+  
+  // Other settings
+  maxPhotos?: number; // Optional: limit jumlah photos per session
+  allowDownloadAfterExpired?: boolean; // Default: false
+}
+
 export interface SessionInfo {
   sessionCode: string;
   eventName: string;
   createdAt: string;
   photoCount: number;
+  settings?: SessionSettings; // Optional untuk backward compatibility
 }
 
 const DB_NAME = 'morobooth-db';
@@ -19,12 +35,27 @@ let incrementLock = false;
 const lockTimeout = 5000; // 5 seconds max wait
 
 function mapSupabaseSession(row: any): SessionInfo {
-  return {
+  const session: SessionInfo = {
     sessionCode: row.session_code,
     eventName: row.event_name,
     createdAt: row.created_at ?? new Date().toISOString(),
     photoCount: row.photo_count ?? 0,
   };
+  
+  // Map settings if available
+  if (row.photo_expired_hours !== undefined || row.enable_expired_check !== undefined) {
+    session.settings = {
+      photoExpiredHours: row.photo_expired_hours ?? 24,
+      enableExpiredCheck: row.enable_expired_check ?? true,
+      autoDeleteDays: row.auto_delete_days ?? 30,
+      storageDeleteDays: row.storage_delete_days ?? 5,
+      enableAutoDelete: row.enable_auto_delete ?? true,
+      maxPhotos: row.max_photos ?? undefined,
+      allowDownloadAfterExpired: row.allow_download_after_expired ?? false
+    };
+  }
+  
+  return session;
 }
 
 async function getDB() {
@@ -324,6 +355,78 @@ export async function getAllSessions(): Promise<SessionInfo[]> {
   return db.getAll(SESSION_STORE);
 }
 
+export async function getSessionByCode(sessionCode: string): Promise<SessionInfo | null> {
+  if (isSupabaseConfigured() && supabase) {
+    const { data, error } = await supabase
+      .from(SESSIONS_TABLE)
+      .select('*')
+      .eq('session_code', sessionCode)
+      .single();
+
+    if (error) {
+      console.error('Supabase getSessionByCode error:', error);
+      return null;
+    }
+    
+    if (data) {
+      return mapSupabaseSession(data);
+    }
+  }
+
+  // Fallback to IndexedDB
+  try {
+    const db = await getDB();
+    const session = await db.get(SESSION_STORE, sessionCode);
+    return session || null;
+  } catch (err) {
+    console.error('IndexedDB getSessionByCode error:', err);
+    return null;
+  }
+}
+
+export async function updateSessionSettings(sessionCode: string, settings: SessionSettings): Promise<boolean> {
+  if (!isSupabaseConfigured() || !supabase) {
+    console.warn('Supabase not configured, cannot update session settings');
+    return false;
+  }
+
+  try {
+    const { error } = await supabase
+      .from(SESSIONS_TABLE)
+      .update({
+        photo_expired_hours: settings.photoExpiredHours,
+        enable_expired_check: settings.enableExpiredCheck,
+        auto_delete_days: settings.autoDeleteDays,
+        storage_delete_days: settings.storageDeleteDays,
+        enable_auto_delete: settings.enableAutoDelete,
+        max_photos: settings.maxPhotos ?? null,
+        allow_download_after_expired: settings.allowDownloadAfterExpired
+      })
+      .eq('session_code', sessionCode);
+
+    if (error) {
+      console.error('Supabase updateSessionSettings error:', error);
+      return false;
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error updating session settings:', err);
+    return false;
+  }
+}
+
+export function getDefaultSessionSettings(): SessionSettings {
+  return {
+    photoExpiredHours: 24,
+    enableExpiredCheck: true,
+    autoDeleteDays: 30,
+    storageDeleteDays: 5,
+    enableAutoDelete: true,
+    allowDownloadAfterExpired: false
+  };
+}
+
 export async function clearSession() {
   const current = await getCurrentSession();
   if (isSupabaseConfigured() && supabase && current) {
@@ -354,10 +457,11 @@ export async function activateSession(sessionCode: string): Promise<SessionInfo 
   // Update Supabase: set all sessions to inactive, then set selected one to active
   if (isSupabaseConfigured() && supabase) {
     try {
-      // First, set all sessions to inactive
+      // First, set all sessions to inactive (need WHERE clause for Supabase security)
       const { error: updateAllError } = await supabase
         .from(SESSIONS_TABLE)
-        .update({ is_active: false });
+        .update({ is_active: false })
+        .neq('session_code', ''); // WHERE clause required by Supabase
       
       if (updateAllError) {
         console.error('[ACTIVATE_SESSION] Supabase update all error:', updateAllError);

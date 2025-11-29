@@ -1,0 +1,224 @@
+.print-animation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.print-animation-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(30px, 7.5vw, 50px);
+  width: 100%;
+  max-width: 500px;
+  padding: clamp(20px, 5vw, 40px);
+}
+
+/* Printer Thermal Illustration */
+.printer-thermal {
+  width: 100%;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.printer-body {
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: visible; /* Allow photo to exit slot but stay within body */
+}
+
+.printer-top {
+  width: 80%;
+  height: clamp(20px, 5vw, 30px);
+  background: var(--c-black);
+  border-radius: clamp(4px, 1vw, 8px) clamp(4px, 1vw, 8px) 0 0;
+  box-shadow: 0 clamp(2px, 0.5vw, 4px) 0 rgba(0, 0, 0, 0.3);
+}
+
+.printer-paper-slot {
+  width: 70%;
+  height: clamp(200px, 50vw, 300px);
+  background: var(--c-white);
+  border: clamp(2px, 0.5vw, 3px) solid var(--c-black);
+  position: relative;
+  overflow: hidden; /* Hidden agar foto tidak keluar dari area printer slot */
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: clamp(10px, 2.5vw, 15px);
+}
+
+.printer-bottom {
+  width: 90%;
+  height: clamp(30px, 7.5vw, 40px);
+  background: var(--c-black);
+  border-radius: 0 0 clamp(8px, 2vw, 12px) clamp(8px, 2vw, 12px);
+  box-shadow: 0 clamp(2px, 0.5vw, 4px) 0 rgba(0, 0, 0, 0.3);
+}
+
+/* Printing Photo Animation */
+.printing-photo {
+  width: 90%;
+  max-width: clamp(150px, 37.5vw, 200px);
+  aspect-ratio: 3 / 4;
+  background: var(--c-white);
+  border: clamp(2px, 0.5vw, 3px) solid var(--c-black);
+  box-shadow: 0 clamp(4px, 1vw, 8px) rgba(0, 0, 0, 0.3);
+  position: absolute; /* Changed to absolute untuk animasi keluar dari slot */
+  top: clamp(10px, 2.5vw, 15px); /* Start dari padding-top */
+  left: 50%;
+  transform: translateX(-50%);
+  overflow: hidden;
+}
+
+.printing-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.photo-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-placeholder::before {
+  content: '📷';
+  font-size: clamp(40px, 10vw, 60px);
+  opacity: 0.5;
+}
+
+/* Animation: Photo keluar dari printer */
+.printing-photo.printing {
+  animation: printPhoto 2.5s ease-out forwards;
+}
+
+@keyframes printPhoto {
+  0% {
+    transform: translateX(-50%) translateY(-100%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(clamp(200px, 50vw, 280px)); /* Keluar dari slot printer */
+  }
+  100% {
+    transform: translateX(-50%) translateY(clamp(280px, 70vw, 400px)); /* Jauh keluar dan hilang */
+    opacity: 0; /* Fade out di akhir agar benar-benar hilang */
+  }
+}
+
+.printing-photo.printed {
+  transform: translateX(-50%) translateY(clamp(280px, 70vw, 400px));
+  opacity: 0;
+}
+
+/* Printing Indicator */
+.printing-indicator {
+  text-align: center;
+  color: var(--c-white);
+  font-family: var(--font-main);
+  font-size: var(--font-lg);
+  font-weight: bold;
+}
+
+.printing-indicator p {
+  margin: 0;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Thank You Message */
+.thank-you-message {
+  text-align: center;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.5s ease-out;
+}
+
+.thank-you-message.show {
+  opacity: 1;
+  transform: scale(1);
+  animation: thankYouAppear 0.5s ease-out;
+}
+
+@keyframes thankYouAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.thank-you-message h2 {
+  font-family: var(--font-main);
+  font-size: var(--font-4xl);
+  color: var(--c-white);
+  margin: 0;
+  text-shadow: 
+    clamp(2px, 0.5vw, 4px) clamp(2px, 0.5vw, 4px) 0 rgba(0, 0, 0, 0.5),
+    0 0 clamp(10px, 2.5vw, 20px) rgba(255, 255, 255, 0.3);
+  letter-spacing: clamp(2px, 0.5vw, 4px);
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+  .print-animation-container {
+    padding: clamp(15px, 3.75vw, 30px);
+  }
+  
+  .printer-paper-slot {
+    height: clamp(150px, 37.5vw, 200px);
+  }
+  
+  .printing-photo.printing {
+    animation-duration: 2s; /* Slightly faster on mobile but still complete */
+  }
+  
+  .thank-you-message h2 {
+    font-size: var(--font-3xl);
+  }
+}
+

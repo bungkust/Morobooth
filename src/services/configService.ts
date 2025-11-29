@@ -476,3 +476,43 @@ export function resetUploadSettings(): void {
     console.error('Failed to reset upload settings:', error);
   }
 }
+
+// Base URL Settings for QR Code
+const DEFAULT_BASE_URL = 'https://morobooth.netlify.app';
+
+export function getBaseUrlSettings(): string {
+  try {
+    const stored = localStorage.getItem('morobooth_base_url_setting');
+    if (stored) {
+      return stored.trim();
+    }
+  } catch (error) {
+    console.warn('Failed to get base URL setting:', error);
+  }
+  
+  // Return default if not set
+  return DEFAULT_BASE_URL;
+}
+
+export function setBaseUrlSettings(url: string): void {
+  try {
+    // Validate URL
+    const urlObj = new URL(url);
+    // Remove trailing slash and path, keep only origin
+    const cleanUrl = urlObj.origin;
+    localStorage.setItem('morobooth_base_url_setting', cleanUrl);
+    console.log('[Config] Base URL setting saved:', cleanUrl);
+  } catch (error) {
+    console.error('Failed to save base URL setting:', error);
+    throw new Error('Invalid URL format');
+  }
+}
+
+export function resetBaseUrlSettings(): void {
+  try {
+    localStorage.removeItem('morobooth_base_url_setting');
+    console.log('[Config] Base URL setting reset to default:', DEFAULT_BASE_URL);
+  } catch (e) {
+    console.error('Failed to reset base URL setting:', e);
+  }
+}

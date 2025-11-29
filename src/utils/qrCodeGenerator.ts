@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 import type { QRCodeSettings } from '../services/configService';
-import { getQRCodeSettings, DEFAULT_QR_SETTINGS } from '../services/configService';
+import { getQRCodeSettings, DEFAULT_QR_SETTINGS, getBaseUrlSettings } from '../services/configService';
 
 const BASE_URL_CACHE_KEY = 'morobooth_base_url';
 
@@ -23,29 +23,66 @@ export function updateBaseUrlIfNeeded(): void {
 }
 
 /**
+ * Check if URL is localhost/127.0.0.1 (development)
+ */
+function isLocalhost(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname.toLowerCase();
+    return hostname === 'localhost' || 
+           hostname === '127.0.0.1' || 
+           hostname === '0.0.0.0' ||
+           hostname.startsWith('192.168.') ||
+           hostname.startsWith('10.') ||
+           hostname.startsWith('172.');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Get base URL with caching for offline support
  */
 function getBaseUrl(): string {
   if (typeof window === 'undefined') return '';
   
-  // Priority 1: Environment variable (production)
+  // Priority 1: Admin panel setting (highest priority)
+  const adminSetting = getBaseUrlSettings();
+  if (adminSetting && !isLocalhost(adminSetting)) {
+    console.log('[QR] Using admin panel base URL setting:', adminSetting);
+    return adminSetting;
+  } else if (adminSetting && isLocalhost(adminSetting)) {
+    console.warn('[QR] Admin panel base URL is localhost, ignoring:', adminSetting);
+  }
+  
+  // Priority 2: Environment variable (production)
   if (import.meta.env.VITE_APP_URL) {
-    const envUrl = import.meta.env.VITE_APP_URL;
-    // Cache it
-    localStorage.setItem(BASE_URL_CACHE_KEY, envUrl);
-    return envUrl;
+    const envUrl = import.meta.env.VITE_APP_URL.trim();
+    if (envUrl && !isLocalhost(envUrl)) {
+      // Cache it
+      localStorage.setItem(BASE_URL_CACHE_KEY, envUrl);
+      console.log('[QR] Using VITE_APP_URL:', envUrl);
+      return envUrl;
+    } else if (isLocalhost(envUrl)) {
+      console.warn('[QR] VITE_APP_URL is set to localhost, ignoring:', envUrl);
+    }
   }
   
-  // Priority 2: Cached base URL (for consistency when offline)
+  // Priority 3: Cached base URL (for consistency when offline)
   const cachedBaseUrl = localStorage.getItem(BASE_URL_CACHE_KEY);
-  if (cachedBaseUrl) {
+  if (cachedBaseUrl && !isLocalhost(cachedBaseUrl)) {
+    console.log('[QR] Using cached base URL:', cachedBaseUrl);
     return cachedBaseUrl;
+  } else if (cachedBaseUrl && isLocalhost(cachedBaseUrl)) {
+    console.warn('[QR] Cached base URL is localhost, ignoring:', cachedBaseUrl);
+    // Clear invalid cache
+    localStorage.removeItem(BASE_URL_CACHE_KEY);
   }
   
-  // Priority 3: Current origin (works offline, but only for same device)
-  const origin = window.location.origin;
-  localStorage.setItem(BASE_URL_CACHE_KEY, origin);
-  return origin;
+  // Priority 4: Default production URL
+  const defaultUrl = 'https://morobooth.netlify.app';
+  console.log('[QR] Using default production URL:', defaultUrl);
+  return defaultUrl;
 }
 
 /**
@@ -107,13 +144,37 @@ export async function generateQRCodeDataURL(
 }
 
 /**
+ * Manually set base URL (useful for admin override)
+ * This now uses configService to persist the setting
+ */
+export function setBaseUrl(url: string): void {
+  if (typeof window === 'undefined') return;
+  
+  try {
+    const { setBaseUrlSettings } = require('../services/configService');
+    setBaseUrlSettings(url);
+    console.log('[QR] Base URL set via admin panel:', url);
+  } catch (error) {
+    console.error('[QR] Invalid URL provided:', url, error);
+    throw error;
+  }
+}
+
+/**
+ * Get current base URL (for debugging/admin)
+ */
+export function getCurrentBaseUrl(): string {
+  return getBaseUrl();
+}
+
+/**
  * Get download URL for a photo ID
  * Uses cached base URL for offline support
  */
 export function getDownloadURL(photoId: string): string {
   // Validate photoId format (should be like "ABC123-001")
   if (!photoId || typeof photoId !== 'string') {
-    console.error('Invalid photoId:', photoId);
+    console.error('[QR] Invalid photoId:', photoId);
     return '';
   }
   
@@ -122,10 +183,18 @@ export function getDownloadURL(photoId: string): string {
   
   // Validate the constructed URL
   try {
+    // Validate URL format
     new URL(downloadUrl);
+    console.log('[QR] Generated download URL:', downloadUrl);
+    
+    // Warn if using localhost
+    if (isLocalhost(downloadUrl)) {
+      console.warn('[QR] WARNING: Download URL uses localhost! QR codes will not work from other devices.');
+    }
+    
     return downloadUrl;
-  } catch {
-    console.error('Failed to construct valid download URL:', downloadUrl);
+  } catch (error) {
+    console.error('[QR] Failed to construct valid download URL:', downloadUrl, error);
     return '';
   }
 }

@@ -20,13 +20,56 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
 
   const checkCameraPermission = async () => {
     try {
+      // CRITICAL: Don't check permission if we're on special pages (admin, download, session-photos, session-details)
+      // These pages don't need camera permission
+      const path = window.location.pathname;
+      const isSpecialPage = path === '/admin' || 
+                           path.startsWith('/download/') || 
+                           (path.startsWith('/session/') && (path.includes('/photos') || path.includes('/details')));
+      
+      if (isSpecialPage) {
+        console.log('[PermissionPage] CRITICAL: Skipping permission check - on special page:', path);
+        setIsChecking(false);
+        return;
+      }
+
+      // CRITICAL: Only check permission if we're on root path
+      if (path !== '/' && path !== '') {
+        console.log('[PermissionPage] CRITICAL: Skipping permission check - not on root path:', path);
+        setIsChecking(false);
+        return;
+      }
+
+      // Double-check path before proceeding
+      const currentPath = window.location.pathname;
+      if (currentPath.startsWith('/download/') || 
+          (currentPath.startsWith('/session/') && (currentPath.includes('/photos') || currentPath.includes('/details'))) ||
+          currentPath === '/admin') {
+        console.log('[PermissionPage] CRITICAL: Path changed during check, aborting:', currentPath);
+        setIsChecking(false);
+        return;
+      }
+
       const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      
+      // Triple-check path before auto-proceeding
+      const finalPath = window.location.pathname;
+      if (finalPath.startsWith('/download/') || 
+          (finalPath.startsWith('/session/') && (finalPath.includes('/photos') || finalPath.includes('/details'))) ||
+          finalPath === '/admin') {
+        console.log('[PermissionPage] CRITICAL: Path changed after permission check, aborting auto-proceed:', finalPath);
+        setIsChecking(false);
+        return;
+      }
       
       if (result.state === 'granted') {
         setIsGranted(true);
-        if (!isAdminPage && autoProceedIfGranted) {
-        onPermissionGranted();
-        return;
+        
+        // Only auto-proceed if we're STILL on root path and not admin page
+        if (!isAdminPage && autoProceedIfGranted && (finalPath === '/' || finalPath === '')) {
+          console.log('[PermissionPage] Auto-proceeding to template');
+          onPermissionGranted();
+          return;
         }
       }
       
@@ -39,6 +82,17 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
 
   // Check camera permission on mount
   useEffect(() => {
+    // Don't check permission if we're on special pages (admin, download, session-photos, session-details)
+    const path = window.location.pathname;
+    const isSpecialPage = path === '/admin' || 
+                         path.startsWith('/download/') || 
+                         (path.startsWith('/session/') && (path.includes('/photos') || path.includes('/details')));
+    
+    if (isSpecialPage) {
+      setIsChecking(false);
+      return;
+    }
+    
     checkCameraPermission();
     
     // Cleanup admin tap timeout on unmount
@@ -51,6 +105,15 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
   }, []);
 
   const handleRequestPermission = async () => {
+    // CRITICAL: Check path before requesting permission
+    const path = window.location.pathname;
+    if (path.startsWith('/download/') || 
+        (path.startsWith('/session/') && (path.includes('/photos') || path.includes('/details'))) ||
+        path === '/admin') {
+      console.log('[PermissionPage] CRITICAL: Cannot request permission on special page:', path);
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     
@@ -65,6 +128,16 @@ export const PermissionPage: React.FC<PermissionPageProps> = ({
       });
       
       stream.getTracks().forEach(track => track.stop());
+      
+      // CRITICAL: Check path again before calling onPermissionGranted
+      const finalPath = window.location.pathname;
+      if (finalPath.startsWith('/download/') || 
+          finalPath.startsWith('/session/') || 
+          finalPath === '/admin') {
+        console.log('[PermissionPage] CRITICAL: Path changed during permission request, aborting:', finalPath);
+        return;
+      }
+      
       onPermissionGranted();
     } catch (err) {
       console.error('Failed to initialize:', err);

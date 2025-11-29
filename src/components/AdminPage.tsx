@@ -14,11 +14,11 @@ import {
   activateSession,
   type SessionInfo 
 } from '../services/sessionService';
-import { getPhotosBySession, getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
+import { getUnuploadedPhotos, markPhotoAsUploaded } from '../services/photoStorageService';
 import { bulkUploadPhotos, type UploadResult } from '../services/uploadService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 import type { ConfigOverride, ConfigHeader, ConfigBody, HeaderMode, PrinterOutputSettings, QRCodeSettings, UploadSettings, PrinterSizeSettings } from '../services/configService';
-import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS, getUploadSettings, setUploadSettings, resetUploadSettings, getPrinterSizeSettings, setPrinterSizeSettings, resetPrinterSizeSettings } from '../services/configService';
+import { getConfigOverride, setConfigOverride, getPrinterOutputSettings, setPrinterOutputSettings, resetPrinterOutputSettings, getQRCodeSettings, setQRCodeSettings, resetQRCodeSettings, DEFAULT_QR_SETTINGS, getUploadSettings, setUploadSettings, resetUploadSettings, getPrinterSizeSettings, setPrinterSizeSettings, resetPrinterSizeSettings, getBaseUrlSettings, setBaseUrlSettings, resetBaseUrlSettings } from '../services/configService';
 import { getHybridBluetoothPrinterService, HybridBluetoothPrinterService } from '../services/hybridBluetoothPrinterService';
 import { nativeBridge } from '../services/nativeBridgeService';
 import { uploadHeaderImage, deleteHeaderImage } from '../services/headerImageUploadService';
@@ -126,7 +126,15 @@ type ConfigOverridePatch = Omit<Partial<ConfigOverride>, 'header' | 'body'> & {
 
 export const AdminPage = () => {
   
-  const [authenticated, setAuthenticated] = useState(false);
+  // Check localStorage for authentication state to persist across page reloads/navigation
+  const [authenticated, setAuthenticated] = useState(() => {
+    try {
+      const saved = localStorage.getItem('admin-authenticated');
+      return saved === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [password, setPassword] = useState('');
   const [currentSession, setCurrentSession] = useState<SessionInfo | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -224,6 +232,9 @@ export const AdminPage = () => {
     saveBeforePrint: true
   });
 
+  // Base URL settings
+  const [baseUrl, setBaseUrlState] = useState<string>('https://morobooth.netlify.app');
+
   // Helper untuk show notification (ganti alert)
   const showNotification = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -293,6 +304,9 @@ export const AdminPage = () => {
       // Load printer size settings
       const savedSizeSettings = getPrinterSizeSettings();
       setPrinterSizeSettingsState(savedSizeSettings);
+      // Load base URL settings
+      const savedBaseUrl = getBaseUrlSettings();
+      setBaseUrlState(savedBaseUrl);
     }
   }, [authenticated, loadData]);
 
@@ -395,6 +409,12 @@ export const AdminPage = () => {
     if (password === adminPassword) {
       setAuthenticated(true);
       setError('');
+      // Save authentication state to localStorage so it persists across page reloads/navigation
+      try {
+        localStorage.setItem('admin-authenticated', 'true');
+      } catch (err) {
+        console.warn('Failed to save authentication state:', err);
+      }
     } else {
       setError('Invalid password');
     }
@@ -441,10 +461,18 @@ export const AdminPage = () => {
     }
   }
 
-  async function viewSessionPhotos(sessionCode: string) {
-    const photos = await getPhotosBySession(sessionCode);
-    const uploaded = photos.filter(p => p.uploaded).length;
-    showNotification(`Session ${sessionCode}: ${photos.length} total photos, ${uploaded} uploaded, ${photos.length - uploaded} pending`, 'info');
+  function viewSessionPhotos(sessionCode: string) {
+    // Redirect ke halaman list photos
+    if (!sessionCode || sessionCode.trim() === '') {
+      console.error('[AdminPage] Invalid sessionCode:', sessionCode);
+      showNotification('Invalid session code', 'error');
+      return;
+    }
+    // Using window.location.href will trigger full page reload
+    // App.tsx useEffect will detect the new path on mount
+    const newPath = `/session/${sessionCode}/photos`;
+    console.log('[AdminPage] Redirecting to:', newPath);
+    window.location.href = newPath;
   }
 
   const handleActivateSession = useCallback(async (sessionCode: string) => {
@@ -892,6 +920,22 @@ export const AdminPage = () => {
                       <span className="value">{new Date(currentSession.createdAt).toLocaleDateString()}</span>
                     </div>
                     <div className="session-actions">
+                      {currentSession && (
+                        <>
+                          <button 
+                            onClick={() => viewSessionPhotos(currentSession.sessionCode)} 
+                            className="primary-btn"
+                          >
+                            View Photos List
+                          </button>
+                          <button 
+                            onClick={() => window.location.href = `/session/${currentSession.sessionCode}/details`} 
+                            className="primary-btn"
+                          >
+                            Session Details
+                          </button>
+                        </>
+                      )}
                       <button onClick={handleClearSession} className="danger-btn">
                         Clear Session
                       </button>
@@ -942,6 +986,12 @@ export const AdminPage = () => {
                             </button>
                             <button onClick={() => viewSessionPhotos(s.sessionCode)} className="small-btn">
                               View Photos
+                            </button>
+                            <button 
+                              onClick={() => window.location.href = `/session/${s.sessionCode}/details`} 
+                              className="small-btn"
+                            >
+                              Details
                             </button>
                           </div>
                         </div>
@@ -1496,6 +1546,60 @@ export const AdminPage = () => {
                       Clear
                     </button>
                   </div>
+                </div>
+              </div>
+
+              {/* Base URL Settings Section */}
+              <div className="admin-card">
+                <div className="card-header">
+                  <h2>QR Code Base URL</h2>
+                </div>
+                <div className="setting-group">
+                  <label className="field-label">
+                    Base URL for QR Codes
+                    <span className="setting-help">(URL yang akan digunakan untuk generate QR code download link)</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={baseUrl}
+                    onChange={(e) => setBaseUrlState(e.target.value)}
+                    placeholder="https://morobooth.netlify.app"
+                    className="text-input"
+                    style={{ width: '100%', padding: '12px', fontSize: '16px', fontFamily: 'monospace' }}
+                  />
+                  <p style={{ marginTop: '8px', fontSize: '14px', color: '#666' }}>
+                    Current URL akan digunakan untuk semua QR code yang di-generate. Pastikan URL ini bisa diakses dari device lain.
+                  </p>
+                  <div style={{ marginTop: '12px', padding: '12px', background: '#f8f9fa', borderRadius: '4px', fontSize: '14px' }}>
+                    <strong>Preview URL:</strong> {baseUrl}/download/PHOTO-ID-001
+                  </div>
+                </div>
+                <div style={{ marginTop: '20px', display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => {
+                      try {
+                        setBaseUrlSettings(baseUrl);
+                        showNotification('Base URL saved! QR codes will use this URL.', 'success');
+                      } catch (error) {
+                        console.error('Failed to save base URL:', error);
+                        showNotification('Failed to save base URL. Please check URL format.', 'error');
+                      }
+                    }}
+                    className="primary-btn"
+                  >
+                    Save Base URL
+                  </button>
+                  <button
+                    onClick={() => {
+                      const defaultUrl = 'https://morobooth.netlify.app';
+                      setBaseUrlState(defaultUrl);
+                      resetBaseUrlSettings();
+                      showNotification('Base URL reset to default', 'info');
+                    }}
+                    className="secondary-btn"
+                  >
+                    Reset to Default
+                  </button>
                 </div>
               </div>
             </div>

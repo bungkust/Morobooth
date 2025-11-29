@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getPhotoById } from '../services/photoStorageService';
 import { getFreshSignedUrl } from '../services/uploadService';
+import { getSessionByCode, getDefaultSessionSettings } from '../services/sessionService';
 
 interface DownloadPageProps {
   photoId: string;
@@ -45,15 +46,44 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         return;
       }
 
-      // Step 2: Validate 24 hours from timestamp
+      // Step 2: Validate expired time from session settings
       const photoTime = new Date(record.timestamp);
       const now = new Date();
       const hoursSincePhoto = (now.getTime() - photoTime.getTime()) / (1000 * 60 * 60);
       
-      if (hoursSincePhoto > 24) {
-        setError('Photo expired. Download link is only valid for 24 hours after printing.');
-        setLoading(false);
-        return;
+      // Load session settings to get expired hours
+      let expiredHours = 24;
+      let enableExpiredCheck = true;
+      let allowDownloadAfterExpired = false;
+      
+      try {
+        const session = await getSessionByCode(record.sessionCode);
+        if (session?.settings) {
+          expiredHours = session.settings.photoExpiredHours || 24;
+          enableExpiredCheck = session.settings.enableExpiredCheck !== false;
+          allowDownloadAfterExpired = session.settings.allowDownloadAfterExpired || false;
+        } else {
+          const defaults = getDefaultSessionSettings();
+          expiredHours = defaults.photoExpiredHours;
+          enableExpiredCheck = defaults.enableExpiredCheck;
+          allowDownloadAfterExpired = defaults.allowDownloadAfterExpired || false;
+        }
+      } catch (err) {
+        console.warn('Failed to load session settings, using defaults:', err);
+        const defaults = getDefaultSessionSettings();
+        expiredHours = defaults.photoExpiredHours;
+        enableExpiredCheck = defaults.enableExpiredCheck;
+      }
+      
+      if (enableExpiredCheck && hoursSincePhoto > expiredHours) {
+        if (allowDownloadAfterExpired) {
+          // Allow download but show warning
+          console.warn('Photo expired but download allowed by settings');
+        } else {
+          setError(`Photo expired. Download link is only valid for ${expiredHours} hours after printing.`);
+          setLoading(false);
+          return;
+        }
       }
 
         // Photo record loaded successfully
@@ -236,7 +266,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         </button>
         
         <p className="expiry-notice">
-          This link is valid for 24 hours from printing time.
+          This link is valid for a limited time from printing time.
         </p>
         
         {!isOnline && (
