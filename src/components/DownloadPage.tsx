@@ -4,6 +4,13 @@ import { getFreshSignedUrl } from '../services/uploadService';
 import { getSessionByCode, getDefaultSessionSettings } from '../services/sessionService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
 
+// Get Supabase URL and key for Edge Function calls
+const getSupabaseConfig = () => {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aoxxjvnwwnedlxikyzds.supabase.co';
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFveHhqdm53d25lZGx4aWt5emRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEzNjcxNDIsImV4cCI6MjA3Njk0MzE0Mn0.GdpiLGx9sPYsSYAKO-VVBbs4S62OWJnWHq4WkefZ0d8';
+  return { supabaseUrl, supabaseAnonKey };
+};
+
 interface DownloadPageProps {
   photoId: string;
 }
@@ -43,13 +50,15 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         console.log('[DownloadPage] Using Edge Function for secure validation...');
         
         try {
-          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aoxxjvnwwnedlxikyzds.supabase.co';
+          const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig();
           const functionsUrl = `${supabaseUrl}/functions/v1/validate-download`;
           
           const response = await fetch(`${functionsUrl}?photoId=${encodeURIComponent(photoId)}&token=${encodeURIComponent(token)}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
+              'apikey': supabaseAnonKey,
+              'Authorization': `Bearer ${supabaseAnonKey}`,
             },
           });
           

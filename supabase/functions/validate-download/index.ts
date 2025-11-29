@@ -1,12 +1,23 @@
 // Supabase Edge Function: Validate Download Request
 // This function validates photo download requests with rate limiting and access logging
 
+// @ts-expect-error - Deno types are available at runtime
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+// @ts-expect-error - ESM types are available at runtime
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Type declarations for Deno runtime
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
 
 interface RateLimitConfig {
@@ -24,7 +35,10 @@ const RATE_LIMIT_CONFIG: RateLimitConfig = {
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { 
+      status: 204,
+      headers: corsHeaders 
+    });
   }
 
   try {
@@ -36,7 +50,13 @@ serve(async (req) => {
       console.error('[ValidateDownload] Missing Supabase configuration');
       return new Response(
         JSON.stringify({ error: 'Server configuration error' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 500, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json' 
+          } 
+        }
       );
     }
 
@@ -193,17 +213,20 @@ serve(async (req) => {
  * Check rate limiting for IP address
  */
 async function checkRateLimit(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   ipAddress: string
 ): Promise<{ allowed: boolean; reason?: string; retryAfter?: number }> {
   try {
     // Cleanup old rate limit records
-    await supabase.rpc('cleanup_old_rate_limits').catch(() => {
+    try {
+      await supabase.rpc('cleanup_old_rate_limits');
+    } catch (rpcError) {
       // Non-fatal if function doesn't exist yet
-    });
+      console.warn('[ValidateDownload] cleanup_old_rate_limits RPC not available:', rpcError);
+    }
 
     // Get or create rate limit record
-    const { data: rateLimit, error: fetchError } = await supabase
+    const { data: rateLimit } = await supabase
       .from('rate_limits')
       .select('*')
       .eq('ip_address', ipAddress)
@@ -211,7 +234,6 @@ async function checkRateLimit(
 
     const now = new Date();
     const oneMinuteAgo = new Date(now.getTime() - 60 * 1000);
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
     // Check if currently blocked
     if (rateLimit?.blocked_until) {
@@ -285,28 +307,50 @@ async function checkRateLimit(
 /**
  * Update rate limit counter
  */
-async function updateRateLimit(supabase: any, ipAddress: string, increment: boolean): Promise<void> {
+async function updateRateLimit(supabase: ReturnType<typeof createClient>, ipAddress: string, increment: boolean): Promise<void> {
   try {
     if (increment) {
-      await supabase.rpc('increment_rate_limit', { ip_addr: ipAddress }).catch(async () => {
-        // Fallback if RPC doesn't exist
-        const { data } = await supabase
-          .from('rate_limits')
-          .select('request_count')
-          .eq('ip_address', ipAddress)
-          .single();
-        
-        if (data) {
-          await supabase
-            .from('rate_limits')
-            .update({ request_count: data.request_count + 1 })
-            .eq('ip_address', ipAddress);
+      try {
+        const { error: rpcError } = await supabase.rpc('increment_rate_limit', { ip_addr: ipAddress });
+        if (rpcError) {
+          throw rpcError; // Fall through to fallback
         }
-      });
+      } catch {
+        // Fallback if RPC doesn't exist - manually increment
+        try {
+          const { data, error: fetchError } = await supabase
+            .from('rate_limits')
+            .select('request_count')
+            .eq('ip_address', ipAddress)
+            .single();
+          
+          if (!fetchError && data) {
+            await supabase
+              .from('rate_limits')
+              .update({ request_count: data.request_count + 1 })
+              .eq('ip_address', ipAddress);
+          } else if (fetchError && fetchError.code === 'PGRST116') {
+            // No row found, create new record
+            await supabase
+              .from('rate_limits')
+              .upsert({
+                ip_address: ipAddress,
+                request_count: 1,
+                window_start: new Date().toISOString(),
+                last_request_at: new Date().toISOString()
+              }, {
+                onConflict: 'ip_address'
+              });
+          }
+        } catch (fallbackError) {
+          console.warn('[ValidateDownload] Rate limit fallback update failed:', fallbackError);
+          // Non-fatal - continue without rate limit update
+        }
+      }
     }
   } catch (error) {
     console.error('[ValidateDownload] Rate limit update error:', error);
-    // Non-fatal
+    // Non-fatal - don't block requests if rate limiting fails
   }
 }
 
@@ -314,7 +358,7 @@ async function updateRateLimit(supabase: any, ipAddress: string, increment: bool
  * Log access attempt
  */
 async function logAccess(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   photoId: string | null,
   token: string | null,
   ipAddress: string,

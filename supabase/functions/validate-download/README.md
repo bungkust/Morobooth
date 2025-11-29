@@ -17,8 +17,10 @@ This Supabase Edge Function validates photo download requests with:
 ## Environment Variables
 
 Set these in Supabase Dashboard > Project Settings > Edge Functions:
-- `SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_URL`: Your Supabase project URL (automatically available)
 - `SUPABASE_SERVICE_ROLE_KEY`: Your service role key (for database access)
+
+Note: These are usually set automatically by Supabase, but you can verify them in the dashboard.
 
 ## Usage
 
@@ -42,4 +44,3 @@ Error (401/403/404/429/500):
   "error": "Error message"
 }
 ```
-
