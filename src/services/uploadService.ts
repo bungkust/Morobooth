@@ -74,6 +74,10 @@ export async function uploadPhotoToSupabase(photo: PhotoRecord): Promise<UploadR
     const fileExists = !listError && existingFiles && existingFiles.length > 0 && 
                       existingFiles.some(f => f.name === `${photo.id}.png`);
     
+    if (!filePath) {
+      throw new Error('Storage path could not be determined');
+    }
+    
     if (fileExists) {
       console.log(`[UPLOAD] File ${filePath} already exists, skipping upload but generating signed URL`);
     } else {

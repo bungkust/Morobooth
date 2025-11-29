@@ -21,10 +21,6 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
   // Extract token from URL query params
   const urlParams = new URLSearchParams(window.location.search);
   const token = urlParams.get('token');
-  
-  // Check if photoId is UUID format (new secure format) or legacy format
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(photoId);
-  const useEdgeFunction = isUUID && token && isSupabaseConfigured() && isOnline;
 
   const loadPhoto = useCallback(async () => {
     // Prevent concurrent loads

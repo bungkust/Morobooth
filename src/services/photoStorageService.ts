@@ -1,7 +1,7 @@
 import { openDB } from 'idb';
 import { getCurrentSession, incrementPhotoCount } from './sessionService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
-import { generateUniqueAccessToken, saveAccessTokenToSupabase } from './accessTokenService';
+import { generateUniqueAccessToken } from './accessTokenService';
 
 export interface PhotoRecord {
   id: string; // UUID for new photos, SESSIONCODE-NUMBER for legacy
@@ -160,7 +160,7 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
     imageDataURL,
     timestamp: new Date().toISOString(),
     uploaded: false,
-    storagePath: storagePath,
+    supabasePath: storagePath,
     accessToken: accessToken
   };
   
