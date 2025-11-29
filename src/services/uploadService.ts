@@ -25,8 +25,34 @@ export async function uploadPhotoToSupabase(photo: PhotoRecord): Promise<UploadR
   
   try {
     const blob = await dataURLtoBlob(photo.imageDataURL);
-    // Use folder structure: sessionCode/photoId.png
-    const filePath = `${photo.sessionCode}/${photo.id}.png`;
+    
+    // Get storage_path from database (UUID-based) or use photo.supabasePath
+    // Fallback to legacy format for backward compatibility
+    let filePath = photo.supabasePath;
+    
+    if (!filePath) {
+      // Try to fetch from database
+      const { data: photoRecord, error: fetchError } = await supabase
+        .from('photos')
+        .select('storage_path')
+        .eq('photo_id', photo.id)
+        .single();
+      
+      if (!fetchError && photoRecord?.storage_path) {
+        filePath = photoRecord.storage_path;
+      } else {
+        // Fallback: Check if UUID format or legacy format
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(photo.id);
+        if (isUUID) {
+          // New format: UUID-based storage path
+          filePath = `photos/${photo.id}/${photo.id}.png`;
+        } else {
+          // Legacy format: sessionCode/photoId.png
+          filePath = `${photo.sessionCode}/${photo.id}.png`;
+        }
+        console.warn(`[UPLOAD] Storage path not found in database, using fallback: ${filePath}`);
+      }
+    }
     
     // Check if file already exists to handle duplicate uploads gracefully
     // List files in the session folder
@@ -79,11 +105,24 @@ export async function uploadPhotoToSupabase(photo: PhotoRecord): Promise<UploadR
     
     if (signError) throw signError;
     
+    // Update storage_path in database if it wasn't set
+    if (photo.supabasePath !== filePath) {
+      try {
+        await supabase
+          .from('photos')
+          .update({ storage_path: filePath })
+          .eq('photo_id', photo.id);
+        console.log(`[UPLOAD] Updated storage_path in database: ${filePath}`);
+      } catch (updateError) {
+        console.warn(`[UPLOAD] Failed to update storage_path in database (non-fatal):`, updateError);
+      }
+    }
+    
     return {
       success: true,
       photoId: photo.id,
       url: signedData.signedUrl, // Temporary signed URL
-      path: filePath // Permanent path in storage: "sessionCode/photoId.png"
+      path: filePath // Permanent path in storage: "photos/{uuid}/{uuid}.png" (new) or "sessionCode/photoId.png" (legacy)
     };
   } catch (error) {
     console.error('Upload error:', error);

@@ -1,23 +1,26 @@
 import { openDB } from 'idb';
 import { getCurrentSession, incrementPhotoCount } from './sessionService';
 import { supabase, isSupabaseConfigured } from '../config/supabase';
+import { generateUniqueAccessToken, saveAccessTokenToSupabase } from './accessTokenService';
 
 export interface PhotoRecord {
-  id: string;
+  id: string; // UUID for new photos, SESSIONCODE-NUMBER for legacy
   sessionCode: string;
   photoNumber: number;
   imageDataURL: string;
   timestamp: string;
   uploaded: boolean;
   supabaseUrl?: string;
-  supabasePath?: string; // Permanent path in Supabase storage (e.g., "ABC123/ABC123-001.png" for new format, or "ABC123-001.png" for old format - backward compatibility)
+  supabasePath?: string; // Permanent path in Supabase storage (e.g., "photos/{uuid}/{uuid}.png" for new format)
+  legacyPhotoId?: string; // Format lama untuk backward compatibility (SESSIONCODE-NUMBER)
+  accessToken?: string; // Access token untuk secure downloads
 }
 
 const DB_NAME = 'morobooth-db';
 const PHOTO_STORE = 'photos';
 
 async function getDB() {
-  return openDB(DB_NAME, 3, {
+  return openDB(DB_NAME, 4, {
     upgrade(db, oldVersion, newVersion, transaction) {
       // Create photos store if it doesn't exist
       if (!db.objectStoreNames.contains(PHOTO_STORE)) {
@@ -126,20 +129,39 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
       throw new Error('Failed to increment photo count. Please try again.');
     }
     
-  const paddedNumber = String(photoNumber).padStart(3, '0');
-  const photoId = `${session.sessionCode}-${paddedNumber}`;
-    console.log('[SAVE_PHOTO] Step 4: Creating photo record');
-    console.log('[SAVE_PHOTO] Photo ID:', photoId);
-    console.log('[SAVE_PHOTO] Photo number:', photoNumber);
-    console.log('[SAVE_PHOTO] Session code:', session.sessionCode);
+  // Step 4: Generate UUID and access token for secure downloads
+  console.log('[SAVE_PHOTO] Step 4: Generating UUID and access token');
+  const photoId = crypto.randomUUID();
+  const legacyPhotoId = `${session.sessionCode}-${String(photoNumber).padStart(3, '0')}`;
+  
+  let accessToken: string;
+  try {
+    accessToken = await generateUniqueAccessToken();
+    console.log('[SAVE_PHOTO] ✓ Access token generated');
+  } catch (error) {
+    console.error('[SAVE_PHOTO] ERROR: Failed to generate access token:', error);
+    throw new Error('Failed to generate access token. Please try again.');
+  }
+  
+  // Generate storage path (UUID-based, unpredictable)
+  const storagePath = `photos/${photoId}/${photoId}.png`;
+  
+  console.log('[SAVE_PHOTO] Photo ID (UUID):', photoId);
+  console.log('[SAVE_PHOTO] Legacy Photo ID:', legacyPhotoId);
+  console.log('[SAVE_PHOTO] Photo number:', photoNumber);
+  console.log('[SAVE_PHOTO] Session code:', session.sessionCode);
+  console.log('[SAVE_PHOTO] Storage path:', storagePath);
   
   const record: PhotoRecord = {
     id: photoId,
+    legacyPhotoId: legacyPhotoId,
     sessionCode: session.sessionCode,
     photoNumber,
     imageDataURL,
     timestamp: new Date().toISOString(),
-    uploaded: false
+    uploaded: false,
+    storagePath: storagePath,
+    accessToken: accessToken
   };
   
     // Check data size (approximate)
@@ -165,6 +187,40 @@ export async function savePhotoLocally(imageDataURL: string): Promise<PhotoRecor
       
   await db.put(PHOTO_STORE, record);
       console.log('[SAVE_PHOTO] ✓ Photo saved successfully to IndexedDB');
+      
+      // Step 6: Insert photo record to Supabase database
+      console.log('[SAVE_PHOTO] Step 6: Inserting to Supabase database');
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const { error: insertError } = await supabase
+            .from('photos')
+            .insert({
+              photo_id: photoId,
+              legacy_photo_id: legacyPhotoId,
+              session_code: session.sessionCode,
+              photo_number: photoNumber,
+              image_data_url: imageDataURL, // Store for backward compatibility
+              timestamp: record.timestamp,
+              uploaded: false,
+              access_token: accessToken,
+              storage_path: storagePath
+            });
+          
+          if (insertError) {
+            console.error('[SAVE_PHOTO] ERROR: Failed to insert to Supabase database:', insertError);
+            // Don't throw - IndexedDB save succeeded, can retry Supabase insert later
+            console.warn('[SAVE_PHOTO] Photo saved to IndexedDB but Supabase insert failed. Will retry on upload.');
+          } else {
+            console.log('[SAVE_PHOTO] ✓ Photo record inserted to Supabase database');
+          }
+        } catch (supabaseError) {
+          console.error('[SAVE_PHOTO] ERROR: Exception inserting to Supabase:', supabaseError);
+          // Non-fatal: IndexedDB is source of truth, Supabase insert can retry later
+        }
+      } else {
+        console.warn('[SAVE_PHOTO] Supabase not configured, skipping database insert');
+      }
+      
       console.log('[SAVE_PHOTO] Photo ID:', photoId);
       console.log('[SAVE_PHOTO] SUCCESS: savePhotoLocally completed');
     } catch (dbError: any) {
@@ -272,7 +328,7 @@ export async function getPhotosBySession(sessionCode: string): Promise<PhotoReco
       console.log(`[getPhotosBySession] Fetching photos from Supabase for session: ${sessionCode}`);
       const { data: supabasePhotos, error } = await supabase
         .from('photos')
-        .select('photo_id, session_code, photo_number, image_data_url, timestamp, uploaded, supabase_url')
+        .select('photo_id, session_code, photo_number, image_data_url, timestamp, uploaded, supabase_url, storage_path, legacy_photo_id, access_token')
         .eq('session_code', sessionCode)
         .order('photo_number', { ascending: true });
       
@@ -335,12 +391,15 @@ export async function getPhotosBySession(sessionCode: string): Promise<PhotoReco
             
             return {
               id: String(row.photo_id),
+              legacyPhotoId: row.legacy_photo_id || undefined,
               sessionCode: String(row.session_code),
               photoNumber: Number(row.photo_number) || 0,
               imageDataURL: imageDataURL,
               timestamp: timestamp,
               uploaded: Boolean(row.uploaded),
-              supabaseUrl: row.supabase_url || undefined
+              supabaseUrl: row.supabase_url || undefined,
+              supabasePath: row.storage_path || undefined,
+              accessToken: row.access_token || undefined
             };
           });
         

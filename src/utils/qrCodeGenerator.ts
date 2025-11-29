@@ -170,22 +170,39 @@ export function getCurrentBaseUrl(): string {
 /**
  * Get download URL for a photo ID
  * Uses cached base URL for offline support
+ * @param photoId - Photo ID (UUID for new photos, SESSIONCODE-NUMBER for legacy)
+ * @param accessToken - Optional access token for secure downloads
  */
-export function getDownloadURL(photoId: string): string {
-  // Validate photoId format (should be like "ABC123-001")
+export function getDownloadURL(photoId: string, accessToken?: string): string {
+  // Validate photoId format
   if (!photoId || typeof photoId !== 'string') {
     console.error('[QR] Invalid photoId:', photoId);
     return '';
   }
   
   const baseUrl = getBaseUrl();
-  const downloadUrl = `${baseUrl}/download/${photoId}`;
+  
+  // Check if UUID format (new secure format) or legacy format
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(photoId);
+  
+  let downloadUrl: string;
+  if (isUUID && accessToken) {
+    // New format: include access token in URL
+    downloadUrl = `${baseUrl}/download/${photoId}?token=${encodeURIComponent(accessToken)}`;
+  } else if (isUUID && !accessToken) {
+    // UUID but no token - try to fetch from database
+    console.warn('[QR] UUID format detected but no access token provided. URL will be generated without token.');
+    downloadUrl = `${baseUrl}/download/${photoId}`;
+  } else {
+    // Legacy format: no token (backward compatibility)
+    downloadUrl = `${baseUrl}/download/${photoId}`;
+  }
   
   // Validate the constructed URL
   try {
     // Validate URL format
     new URL(downloadUrl);
-    console.log('[QR] Generated download URL:', downloadUrl);
+    console.log('[QR] Generated download URL:', downloadUrl.replace(accessToken || '', '[TOKEN]'));
     
     // Warn if using localhost
     if (isLocalhost(downloadUrl)) {

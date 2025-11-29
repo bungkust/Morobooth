@@ -18,6 +18,14 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
   const [signedUrlCache, setSignedUrlCache] = useState<{ url: string; expiry: number } | null>(null);
   const isLoadingRef = useRef(false); // Guard to prevent concurrent loads
 
+  // Extract token from URL query params
+  const urlParams = new URLSearchParams(window.location.search);
+  const token = urlParams.get('token');
+  
+  // Check if photoId is UUID format (new secure format) or legacy format
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(photoId);
+  const useEdgeFunction = isUUID && token && isSupabaseConfigured() && isOnline;
+
   const loadPhoto = useCallback(async () => {
     // Prevent concurrent loads
     if (isLoadingRef.current) {
@@ -30,7 +38,155 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
       setLoading(true);
       setError('');
       
-      // Step 1: Always try to load from Supabase first (for cross-device access)
+      // Check if photoId is UUID format (new secure format) or legacy format
+      const isUUIDFormat = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(photoId);
+      const shouldUseEdgeFunction = isUUIDFormat && token && isSupabaseConfigured() && isOnline;
+      
+      // Step 1: If UUID format with token, use Edge Function for secure validation
+      if (shouldUseEdgeFunction && token) {
+        console.log('[DownloadPage] Using Edge Function for secure validation...');
+        
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://aoxxjvnwwnedlxikyzds.supabase.co';
+          const functionsUrl = `${supabaseUrl}/functions/v1/validate-download`;
+          
+          const response = await fetch(`${functionsUrl}?photoId=${encodeURIComponent(photoId)}&token=${encodeURIComponent(token)}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const data = await response.json();
+          
+          if (!response.ok) {
+            // Handle different error statuses
+            if (response.status === 401) {
+              setError('Invalid download link. Please check the QR code and try again.');
+            } else if (response.status === 403) {
+              setError('Download link has expired.');
+            } else if (response.status === 404) {
+              setError('Photo not found or not available yet.');
+            } else if (response.status === 429) {
+              setError('Too many requests. Please try again later.');
+            } else {
+              setError(data.error || 'Failed to validate download link. Please try again.');
+            }
+            setLoading(false);
+            return;
+          }
+          
+          // Success - got signed URL from Edge Function
+          if (data.signedUrl) {
+            const cacheExpiry = Date.now() + (data.expiresIn || 3600) * 1000;
+            setSignedUrlCache({ url: data.signedUrl, expiry: cacheExpiry });
+            setDownloadUrl(data.signedUrl);
+            setLoading(false);
+            console.log('[DownloadPage] ✓ Photo validated and signed URL received from Edge Function');
+            return;
+          } else {
+            setError('Invalid response from server. Please try again.');
+            setLoading(false);
+            return;
+          }
+        } catch (fetchError) {
+          console.error('[DownloadPage] Edge Function request failed:', fetchError);
+          setError('Failed to connect to server. Please check your internet connection and try again.');
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Step 2: UUID format without token - query database directly
+      if (isUUIDFormat && !token && isSupabaseConfigured() && supabase && isOnline) {
+        console.log('[DownloadPage] UUID format detected without token, querying database...');
+        
+        try {
+          // Query database for photo by UUID
+          const { data: photoData, error: photoError } = await supabase
+            .from('photos')
+            .select('photo_id, session_code, photo_number, timestamp, uploaded, storage_path, access_token, legacy_photo_id')
+            .eq('photo_id', photoId)
+            .single();
+          
+          if (photoError || !photoData) {
+            console.error('[DownloadPage] Photo not found in database:', photoError);
+            // Fall through to legacy logic
+          } else if (photoData.uploaded) {
+            // Photo exists and is uploaded, generate signed URL
+            // Use storage_path if available, otherwise construct from legacy_photo_id
+            let storagePath = photoData.storage_path;
+            
+            if (!storagePath) {
+              // Try to get legacy_photo_id from database
+              const { data: fullPhotoData } = await supabase
+                .from('photos')
+                .select('legacy_photo_id, session_code')
+                .eq('photo_id', photoId)
+                .single();
+              
+              if (fullPhotoData?.legacy_photo_id) {
+                storagePath = `${fullPhotoData.session_code}/${fullPhotoData.legacy_photo_id}.png`;
+                console.log('[DownloadPage] Constructed storage path from legacy ID:', storagePath);
+              } else {
+                // Try UUID-based path as last resort
+                storagePath = `photos/${photoId}/${photoId}.png`;
+                console.log('[DownloadPage] Constructed storage path from UUID:', storagePath);
+              }
+            }
+            
+            if (storagePath) {
+              const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+                .from('photos')
+                .createSignedUrl(storagePath, 86400); // 24 hours
+              
+              if (!signedUrlError && signedUrlData?.signedUrl) {
+                const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
+                setSignedUrlCache({ url: signedUrlData.signedUrl, expiry: cacheExpiry });
+                setDownloadUrl(signedUrlData.signedUrl);
+                setLoading(false);
+                console.log('[DownloadPage] ✓ Photo found in database, signed URL generated');
+                return;
+              } else {
+                console.error('[DownloadPage] Failed to generate signed URL:', signedUrlError);
+                // Try alternative path if first attempt failed
+                if (photoData.legacy_photo_id) {
+                  const altPath = `${photoData.session_code}/${photoData.legacy_photo_id}.png`;
+                  console.log('[DownloadPage] Trying alternative path:', altPath);
+                  const { data: altSignedUrlData, error: altError } = await supabase.storage
+                    .from('photos')
+                    .createSignedUrl(altPath, 86400);
+                  
+                  if (!altError && altSignedUrlData?.signedUrl) {
+                    const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
+                    setSignedUrlCache({ url: altSignedUrlData.signedUrl, expiry: cacheExpiry });
+                    setDownloadUrl(altSignedUrlData.signedUrl);
+                    setLoading(false);
+                    console.log('[DownloadPage] ✓ Photo found using alternative path');
+                    return;
+                  }
+                }
+                // Fall through to error
+              }
+            } else {
+              console.error('[DownloadPage] No storage path available for photo');
+              setError('Photo storage path not configured. Please contact support.');
+              setLoading(false);
+              return;
+            }
+          } else {
+            console.warn('[DownloadPage] Photo found but not uploaded yet');
+            setError('Photo not available yet. Please try again later.');
+            setLoading(false);
+            return;
+          }
+        } catch (dbError) {
+          console.error('[DownloadPage] Database query error:', dbError);
+          // Fall through to legacy logic
+        }
+      }
+      
+      // Step 3: Legacy format or no token - use existing logic (backward compatibility)
       let record = null;
       let sessionCode = '';
       
@@ -138,12 +294,70 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         }
       }
       
+      // If UUID format and still no record, try querying database by UUID one more time
+      if (!record && isUUIDFormat && isSupabaseConfigured() && supabase && isOnline) {
+        console.log('[DownloadPage] UUID format, trying database query again...');
+        try {
+          const { data: photoData, error: photoError } = await supabase
+            .from('photos')
+            .select('photo_id, session_code, photo_number, timestamp, uploaded, storage_path, legacy_photo_id')
+            .or(`photo_id.eq.${photoId},legacy_photo_id.eq.${photoId}`)
+            .single();
+          
+          if (!photoError && photoData && photoData.uploaded) {
+            // Found in database, generate signed URL
+            // Use storage_path if available, otherwise construct from legacy_photo_id
+            let storagePath = photoData.storage_path;
+            
+            if (!storagePath && photoData.legacy_photo_id) {
+              storagePath = `${photoData.session_code}/${photoData.legacy_photo_id}.png`;
+            } else if (!storagePath && photoData.photo_id) {
+              storagePath = `photos/${photoData.photo_id}/${photoData.photo_id}.png`;
+            }
+            
+            if (storagePath) {
+              const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+                .from('photos')
+                .createSignedUrl(storagePath, 86400);
+              
+              if (!signedUrlError && signedUrlData?.signedUrl) {
+                const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
+                setSignedUrlCache({ url: signedUrlData.signedUrl, expiry: cacheExpiry });
+                setDownloadUrl(signedUrlData.signedUrl);
+                setLoading(false);
+                console.log('[DownloadPage] ✓ Photo found in database (retry), signed URL generated');
+                return;
+              } else if (photoData.legacy_photo_id) {
+                // Try alternative path
+                const altPath = `${photoData.session_code}/${photoData.legacy_photo_id}.png`;
+                const { data: altSignedUrlData, error: altError } = await supabase.storage
+                  .from('photos')
+                  .createSignedUrl(altPath, 86400);
+                
+                if (!altError && altSignedUrlData?.signedUrl) {
+                  const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
+                  setSignedUrlCache({ url: altSignedUrlData.signedUrl, expiry: cacheExpiry });
+                  setDownloadUrl(altSignedUrlData.signedUrl);
+                  setLoading(false);
+                  console.log('[DownloadPage] ✓ Photo found using alternative path (retry)');
+                  return;
+                }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[DownloadPage] Database retry failed:', err);
+        }
+      }
+      
       if (!record) {
         console.error('[DownloadPage] Photo not found in Supabase or IndexedDB');
         if (!isOnline) {
           setError('Photo not found. Please check your internet connection and try again.');
         } else if (!isSupabaseConfigured() || !supabase) {
           setError('Photo not found. Storage service is not configured.');
+        } else if (isUUIDFormat) {
+          setError(`Photo not found. The photo may not exist in the database yet, or the link is invalid. If you have the access token, please include it in the URL: /download/${photoId}?token=YOUR_TOKEN`);
         } else {
           setError(`Photo "${photoId}" not found. It may have been deleted, expired, or the link is invalid.`);
         }

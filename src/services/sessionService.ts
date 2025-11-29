@@ -59,18 +59,26 @@ function mapSupabaseSession(row: any): SessionInfo {
 }
 
 async function getDB() {
-  return openDB(DB_NAME, 3, {
-    upgrade(db, _oldVersion, _newVersion) {
+  return openDB(DB_NAME, 4, {
+    upgrade(db, oldVersion, newVersion) {
       // Create sessions store
       if (!db.objectStoreNames.contains(SESSION_STORE)) {
         db.createObjectStore(SESSION_STORE, { keyPath: 'sessionCode' });
       }
       
       // Create photos store (if not exists, photoStorageService will handle it)
+      // Note: photoStorageService handles its own migrations, so we only create if it doesn't exist
       if (!db.objectStoreNames.contains(PHOTO_STORE)) {
         const store = db.createObjectStore(PHOTO_STORE, { keyPath: 'id' });
         store.createIndex('sessionCode', 'sessionCode');
         store.createIndex('uploaded', 'uploaded');
+      }
+      
+      // Migration from version 3 to 4: handled by photoStorageService
+      // sessionService doesn't need to do anything for v4 migration
+      if (oldVersion < 4 && newVersion === 4) {
+        console.log('[SessionService] Database upgraded from version', oldVersion, 'to', newVersion);
+        // Migration logic is handled by photoStorageService
       }
     }
   });

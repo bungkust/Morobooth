@@ -96,7 +96,17 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
     
     if (currentPhotoId) {
       try {
-      const downloadURL = getDownloadURL(currentPhotoId);
+        // Try to fetch access token from IndexedDB
+        let accessToken: string | undefined;
+        try {
+          const { getPhotoById } = await import('../services/photoStorageService');
+          const photoRecord = await getPhotoById(currentPhotoId);
+          accessToken = photoRecord?.accessToken;
+        } catch (err) {
+          console.warn('[COMPOSE_IMAGE_FOR_PRINT] Could not fetch access token:', err);
+        }
+        
+        const downloadURL = getDownloadURL(currentPhotoId, accessToken);
       console.log('[COMPOSE_IMAGE_FOR_PRINT] Download URL:', downloadURL);
         
         if (!downloadURL) {
@@ -595,8 +605,18 @@ export const PhotoBoothApp: React.FC<PhotoBoothAppProps> = ({ template, onBackTo
       
       const photoId = photoBoothRef.current.getPhotoIdForPrint?.();
       if (photoId) {
+        // Try to fetch access token from IndexedDB
+        let accessToken: string | undefined;
+        try {
+          const { getPhotoById } = await import('../services/photoStorageService');
+          const photoRecord = await getPhotoById(photoId);
+          accessToken = photoRecord?.accessToken;
+        } catch (err) {
+          console.warn('[handleCanvasClick] Could not fetch access token:', err);
+        }
+        
         // Generate QR code for download page
-        const downloadURL = getDownloadURL(photoId);
+        const downloadURL = getDownloadURL(photoId, accessToken);
         console.log('Download URL for modal:', downloadURL);
         const qrCodeDataURL = await generateQRCodeDataURL(downloadURL);
         // Fix: Re-check after await

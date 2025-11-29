@@ -150,7 +150,8 @@ export const SessionPhotosPage: React.FC<SessionPhotosPageProps> = ({ sessionCod
       // This significantly improves performance for large photo counts (e.g., 5000+ photos)
       const urlMap: Record<string, string> = {};
       for (const photo of uploadedPhotos) {
-        urlMap[photo.id] = getDownloadURL(photo.id);
+        // Use access token from photo record if available
+        urlMap[photo.id] = getDownloadURL(photo.id, photo.accessToken);
       }
       setDownloadUrls(urlMap);
       
@@ -186,7 +187,7 @@ export const SessionPhotosPage: React.FC<SessionPhotosPageProps> = ({ sessionCod
     // Lazy load QR code only when user clicks to view photo detail
     // This prevents generating QR codes for all photos on page load
     if (!qrCodes[photo.id]) {
-      const downloadUrl = downloadUrls[photo.id] || getDownloadURL(photo.id);
+      const downloadUrl = downloadUrls[photo.id] || getDownloadURL(photo.id, photo.accessToken);
       if (downloadUrl) {
         try {
           // Check cache first
