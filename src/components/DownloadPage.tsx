@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getPhotoById } from '../services/photoStorageService';
 import { getFreshSignedUrl } from '../services/uploadService';
 import { getSessionByCode, getDefaultSessionSettings } from '../services/sessionService';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 
 interface DownloadPageProps {
   photoId: string;
@@ -37,14 +38,139 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
       setLoading(true);
       setError('');
       
-      // Step 1: Get photo from IndexedDB
-      const record = await getPhotoById(photoId);
+      // Step 1: Always try to load from Supabase first (for cross-device access)
+      let record = null;
+      let sessionCode = '';
+      
+      if (isSupabaseConfigured() && supabase && isOnline) {
+        console.log('[DownloadPage] Loading photo from Supabase...');
+        
+        // Extract session code from photoId (format: SESSIONCODE-001)
+        // Pattern: any uppercase letters, numbers, and hyphens, followed by hyphen and digits
+        const sessionCodeMatch = photoId.match(/^([A-Z0-9-]+)-(\d+)$/);
+        if (sessionCodeMatch && sessionCodeMatch[1]) {
+          sessionCode = sessionCodeMatch[1];
+          console.log('[DownloadPage] Extracted session code from photoId:', sessionCode, 'from:', photoId);
+          const photoNumber = parseInt(photoId.split('-').pop() || '0');
+          
+          // Try to find photo in Supabase storage
+          const filePath = `${sessionCode}/${photoId}.png`;
+          
+          try {
+            // Check if file exists and get signed URL
+            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+              .from('photos')
+              .createSignedUrl(filePath, 86400);
+            
+            if (!signedUrlError && signedUrlData?.signedUrl) {
+              // Photo exists in Supabase, create a record
+              record = {
+                id: photoId,
+                sessionCode: sessionCode,
+                photoNumber: photoNumber,
+                imageDataURL: '', // Will use signed URL
+                timestamp: new Date().toISOString(), // Will try to get from file metadata
+                uploaded: true,
+                supabasePath: filePath
+              };
+              
+              // Store the signed URL immediately so we can use it later
+              const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
+              setSignedUrlCache({ url: signedUrlData.signedUrl, expiry: cacheExpiry });
+              
+              console.log('[DownloadPage] Photo found in Supabase storage, signed URL cached:', signedUrlData.signedUrl.substring(0, 50) + '...');
+              
+              // Try to get file metadata for timestamp (non-blocking)
+              try {
+                const { data: fileList, error: listError } = await supabase.storage
+                  .from('photos')
+                  .list(sessionCode, {
+                    search: `${photoId}.png`
+                  });
+                
+                if (!listError && fileList && fileList.length > 0) {
+                  const file = fileList[0];
+                  if (file.created_at) {
+                    record.timestamp = file.created_at;
+                  } else if (file.updated_at) {
+                    record.timestamp = file.updated_at;
+                  }
+                  console.log('[DownloadPage] File metadata retrieved, timestamp:', record.timestamp);
+                }
+              } catch (metadataErr) {
+                console.warn('[DownloadPage] Failed to get file metadata (non-critical), using current time:', metadataErr);
+              }
+            } else {
+              console.error('[DownloadPage] Photo not found in Supabase storage. Error:', signedUrlError);
+              console.error('[DownloadPage] File path attempted:', filePath);
+              console.error('[DownloadPage] Signed URL data:', signedUrlData);
+              
+              // Check if it's a permission error
+              if (signedUrlError) {
+                const errorMsg = signedUrlError.message || String(signedUrlError);
+                console.error('[DownloadPage] Error message:', errorMsg);
+                // Log error object for debugging (may contain additional properties)
+                console.error('[DownloadPage] Error object:', signedUrlError);
+                
+                if (errorMsg.toLowerCase().includes('permission') || 
+                    errorMsg.toLowerCase().includes('access') || 
+                    errorMsg.toLowerCase().includes('denied') ||
+                    errorMsg.toLowerCase().includes('forbidden') ||
+                    errorMsg.toLowerCase().includes('unauthorized')) {
+                  console.error('[DownloadPage] PERMISSION ERROR: Storage bucket may not allow public read access or signed URL generation');
+                  console.error('[DownloadPage] Please check Supabase storage bucket policies for "photos" bucket');
+                } else if (errorMsg.toLowerCase().includes('not found') || 
+                          errorMsg.toLowerCase().includes('does not exist')) {
+                  console.error('[DownloadPage] FILE NOT FOUND: Photo file does not exist in storage');
+                }
+              }
+            }
+          } catch (err) {
+            console.warn('[DownloadPage] Failed to check Supabase storage:', err);
+            // Store error for later use in error message
+            if (err instanceof Error) {
+              (window as any).__lastSupabaseError = err;
+            }
+          }
+        }
+      }
+      
+      // Fallback to IndexedDB only if Supabase failed and we're offline
+      if (!record) {
+        console.log('[DownloadPage] Trying IndexedDB as fallback...');
+        const localRecord = await getPhotoById(photoId);
+        if (localRecord) {
+          record = localRecord;
+          sessionCode = localRecord.sessionCode;
+          console.log('[DownloadPage] Photo found in IndexedDB');
+        }
+      }
       
       if (!record) {
-        setError('Photo not found. It may have been deleted or expired.');
+        console.error('[DownloadPage] Photo not found in Supabase or IndexedDB');
+        if (!isOnline) {
+          setError('Photo not found. Please check your internet connection and try again.');
+        } else if (!isSupabaseConfigured() || !supabase) {
+          setError('Photo not found. Storage service is not configured.');
+        } else {
+          setError(`Photo "${photoId}" not found. It may have been deleted, expired, or the link is invalid.`);
+        }
         setLoading(false);
         return;
       }
+      
+      // Use sessionCode from record if we got it
+      if (!sessionCode && record.sessionCode) {
+        sessionCode = record.sessionCode;
+      }
+      
+      console.log('[DownloadPage] Photo record loaded:', {
+        id: record.id,
+        sessionCode: sessionCode || record.sessionCode,
+        uploaded: record.uploaded,
+        supabasePath: record.supabasePath,
+        hasImageData: !!record.imageDataURL
+      });
 
       // Step 2: Validate expired time from session settings
       const photoTime = new Date(record.timestamp);
@@ -57,7 +183,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
       let allowDownloadAfterExpired = false;
       
       try {
-        const session = await getSessionByCode(record.sessionCode);
+        const session = await getSessionByCode(sessionCode || record.sessionCode);
         if (session?.settings) {
           expiredHours = session.settings.photoExpiredHours || 24;
           enableExpiredCheck = session.settings.enableExpiredCheck !== false;
@@ -73,6 +199,7 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         const defaults = getDefaultSessionSettings();
         expiredHours = defaults.photoExpiredHours;
         enableExpiredCheck = defaults.enableExpiredCheck;
+        allowDownloadAfterExpired = defaults.allowDownloadAfterExpired || false;
       }
       
       if (enableExpiredCheck && hoursSincePhoto > expiredHours) {
@@ -80,7 +207,18 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
           // Allow download but show warning
           console.warn('Photo expired but download allowed by settings');
         } else {
-          setError(`Photo expired. Download link is only valid for ${expiredHours} hours after printing.`);
+          const days = Math.floor(expiredHours / 24);
+          const hours = expiredHours % 24;
+          let timeStr = '';
+          if (days > 0) {
+            timeStr = `${days} day${days !== 1 ? 's' : ''}`;
+            if (hours > 0) {
+              timeStr += ` and ${hours} hour${hours !== 1 ? 's' : ''}`;
+            }
+          } else {
+            timeStr = `${expiredHours} hour${expiredHours !== 1 ? 's' : ''}`;
+          }
+          setError(`Photo expired. Download link is only valid for ${timeStr} after printing.`);
           setLoading(false);
           return;
         }
@@ -89,11 +227,22 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         // Photo record loaded successfully
 
       // Step 3: Check if photo is uploaded and has supabasePath
+      // CRITICAL: If we already have signed URL in cache (from step 1), use it immediately after expired check
+      if (signedUrlCache && signedUrlCache.expiry > Date.now() && signedUrlCache.url && record.uploaded) {
+        console.log('[DownloadPage] Using cached signed URL from step 1 (already validated expired)');
+        setDownloadUrl(signedUrlCache.url);
+        setIsLocalOnly(false);
+        setLoading(false);
+        return;
+      }
+      
       if (record.uploaded && record.supabasePath) {
+        console.log('[DownloadPage] Photo is uploaded, getting signed URL from:', record.supabasePath);
         // Photo is in Supabase - try to get fresh signed URL
         if (isOnline) {
-          // Check cache first
+          // Check cache first (shouldn't reach here if cache was valid, but double-check)
           if (signedUrlCache && signedUrlCache.expiry > Date.now()) {
+            console.log('[DownloadPage] Using cached signed URL');
             setDownloadUrl(signedUrlCache.url);
             setIsLocalOnly(false);
             setLoading(false);
@@ -101,9 +250,11 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
           }
           
           // Generate fresh signed URL on-demand
+          console.log('[DownloadPage] Generating fresh signed URL...');
           const freshUrl = await getFreshSignedUrl(record.supabasePath);
           
           if (freshUrl) {
+            console.log('[DownloadPage] Signed URL generated successfully');
             // Cache the signed URL (expires in 23 hours to be safe)
             const cacheExpiry = Date.now() + (23 * 60 * 60 * 1000);
             setSignedUrlCache({ url: freshUrl, expiry: cacheExpiry });
@@ -114,11 +265,14 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
           }
           
           // If fresh signed URL generation failed, fallback to local if available
-          console.warn('Failed to get fresh signed URL, falling back to local storage');
+          console.warn('[DownloadPage] Failed to get fresh signed URL, falling back to local storage');
+        } else {
+          console.log('[DownloadPage] Offline mode, checking for local data');
         }
         
         // Offline or failed to get signed URL - fallback to local if available
         if (record.imageDataURL) {
+          console.log('[DownloadPage] Using local image data');
           setDownloadUrl(record.imageDataURL);
           setIsLocalOnly(true);
           setLoading(false);
@@ -126,9 +280,39 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         }
         
         // No local fallback available
-        setError('Photo is uploaded but not available offline. Please connect to internet.');
+        console.error('[DownloadPage] No signed URL and no local data available');
+        if (!isOnline) {
+          setError('Photo is uploaded but not available offline. Please connect to the internet to download.');
+        } else {
+          setError('Failed to generate download link. The photo may have been deleted from storage. Please contact support if this issue persists.');
+        }
         setLoading(false);
         return;
+      }
+      
+      // If record doesn't have supabasePath but we know it should be in Supabase
+      if (record.uploaded && !record.supabasePath && sessionCode) {
+        console.log('[DownloadPage] Record marked as uploaded but no supabasePath, trying to construct path...');
+        const filePath = `${sessionCode}/${photoId}.png`;
+        try {
+          const freshUrl = await getFreshSignedUrl(filePath);
+          if (freshUrl) {
+            console.log('[DownloadPage] Successfully got signed URL with constructed path');
+            setDownloadUrl(freshUrl);
+            setIsLocalOnly(false);
+            setLoading(false);
+            return;
+          } else {
+            setError(`Photo "${photoId}" is marked as uploaded but could not be found in storage. The file may have been deleted.`);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.error('[DownloadPage] Failed to get signed URL with constructed path:', err);
+          setError(`Failed to access photo "${photoId}". Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+          setLoading(false);
+          return;
+        }
       }
 
       // Step 4: Photo not uploaded or no supabasePath - use local storage
@@ -145,13 +329,26 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
         
         setLoading(false);
       } else {
-        setError('Photo data not available');
+        console.error('[DownloadPage] No image data available and photo not in Supabase');
+        if (!isOnline) {
+          setError('Photo data not available offline. Please connect to the internet to download.');
+        } else if (!record.uploaded) {
+          setError('Photo has not been uploaded yet. Please wait a moment and try again, or contact support if the issue persists.');
+        } else {
+          setError(`Photo "${photoId}" data is not available. The photo may have been deleted or corrupted.`);
+        }
         setLoading(false);
       }
       
     } catch (err) {
-      console.error('Error loading photo:', err);
-      setError('Failed to load photo. Please try again.');
+      console.error('[DownloadPage] Error loading photo:', err);
+      console.error('[DownloadPage] Error details:', {
+        photoId,
+        isOnline,
+        supabaseConfigured: isSupabaseConfigured(),
+        error: err instanceof Error ? err.message : String(err)
+      });
+      setError(`Failed to load photo: ${err instanceof Error ? err.message : 'Unknown error'}. Please try again.`);
       setLoading(false);
     }
   }
@@ -219,18 +416,41 @@ export const DownloadPage: React.FC<DownloadPageProps> = ({ photoId }) => {
       <div className="download-page">
         <div className="error-container">
           <h1>Download Failed</h1>
-          <p>{error}</p>
+          <div className="error-message">
+            <p style={{ fontSize: '18px', marginBottom: '16px', fontWeight: 600 }}>{error}</p>
+          </div>
           {isLocalOnly && (
-            <p className="warning">
-              ⚠️ This photo is only available on this device.
-              {!isOnline && ' Connect to internet to upload and share.'}
-            </p>
+            <div className="warning" style={{ marginTop: '16px', padding: '12px', backgroundColor: '#fff3cd', border: '1px solid #ffc107', borderRadius: '4px' }}>
+              <p style={{ margin: 0, fontWeight: 600 }}>⚠️ Local Only</p>
+              <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                This photo is only available on this device.
+                {!isOnline && ' Connect to internet to upload and share.'}
+              </p>
+            </div>
           )}
           {!isOnline && (
-            <p className="info">
-              💡 Connect to internet to access photos from cloud storage.
-            </p>
+            <div className="info" style={{ marginTop: '16px', padding: '12px', backgroundColor: '#d1ecf1', border: '1px solid #bee5eb', borderRadius: '4px' }}>
+              <p style={{ margin: 0, fontWeight: 600 }}>💡 Connection Required</p>
+              <p style={{ margin: '8px 0 0 0', fontSize: '14px' }}>
+                Connect to internet to access photos from cloud storage.
+              </p>
+            </div>
           )}
+          <div style={{ marginTop: '24px' }}>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="download-btn"
+              style={{ marginRight: '12px' }}
+            >
+              Retry
+            </button>
+            <button 
+              onClick={() => window.location.href = '/'} 
+              className="secondary-btn"
+            >
+              Go Home
+            </button>
+          </div>
         </div>
       </div>
     );

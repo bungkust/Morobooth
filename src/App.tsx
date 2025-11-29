@@ -30,18 +30,18 @@ function App() {
     const path = window.location.pathname;
     console.log('[App] getInitialState - path:', path);
     
-    // Priority order: download > session-photos > admin > root
+    // Priority order: download > session-photos > session-details > admin > root
     if (path.startsWith('/download/')) {
       const photoId = path.split('/')[2];
       console.log('[App] getInitialState - download path, photoId:', photoId);
-      return { page: 'download' as AppPage, photoId: photoId || '', sessionCode: '' };
+      return { page: 'download' as AppPage, photoId: photoId || '', sessionCode: '', sessionCodeForDetails: '' };
     }
     if (path.startsWith('/session/') && path.includes('/photos')) {
       const parts = path.split('/');
       if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'photos') {
         const sessionCode = parts[2];
         console.log('[App] getInitialState - session-photos path, sessionCode:', sessionCode);
-        return { page: 'session-photos' as AppPage, photoId: '', sessionCode: sessionCode || '' };
+        return { page: 'session-photos' as AppPage, photoId: '', sessionCode: sessionCode || '', sessionCodeForDetails: '' };
       }
     }
     if (path.startsWith('/session/') && path.includes('/details')) {
@@ -49,19 +49,19 @@ function App() {
       if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'details') {
         const sessionCode = parts[2];
         console.log('[App] getInitialState - session-details path, sessionCode:', sessionCode);
-        return { page: 'session-details' as AppPage, photoId: '', sessionCode: sessionCode || '' };
+        return { page: 'session-details' as AppPage, photoId: '', sessionCode: '', sessionCodeForDetails: sessionCode || '' };
       }
     }
     if (path === '/admin') {
       console.log('[App] getInitialState - admin path');
-      return { page: 'admin' as AppPage, photoId: '', sessionCode: '' };
+      return { page: 'admin' as AppPage, photoId: '', sessionCode: '', sessionCodeForDetails: '' };
     }
     if (path === '/' || path === '') {
       console.log('[App] getInitialState - root path');
-      return { page: 'permission' as AppPage, photoId: '', sessionCode: '' };
+      return { page: 'permission' as AppPage, photoId: '', sessionCode: '', sessionCodeForDetails: '' };
     }
     console.log('[App] getInitialState - unknown path, defaulting to permission');
-    return { page: 'permission' as AppPage, photoId: '', sessionCode: '' };
+    return { page: 'permission' as AppPage, photoId: '', sessionCode: '', sessionCodeForDetails: '' };
   };
 
   const initialState = getInitialState();
@@ -69,7 +69,7 @@ function App() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [photoIdToDownload, setPhotoIdToDownload] = useState<string>(initialState.photoId);
   const [sessionCodeForPhotos, setSessionCodeForPhotos] = useState<string>(initialState.sessionCode);
-  const [sessionCodeForDetails, setSessionCodeForDetails] = useState<string>('');
+  const [sessionCodeForDetails, setSessionCodeForDetails] = useState<string>(initialState.sessionCodeForDetails);
   // Set permissionAutoProceed to false for special paths (download, session-photos, session-details, admin)
   const initialPath = window.location.pathname;
   const isSpecialPathInitial = initialPath.startsWith('/download/') || 
@@ -139,6 +139,42 @@ function App() {
       setPermissionAutoProceed(true);
     }
   }, []); // Empty dependency array - only run once on mount
+
+  // Sync state with path changes (for cases where path changes without navigation events)
+  // This ensures state stays in sync with URL without calling setters during render
+  useEffect(() => {
+    const currentPath = window.location.pathname;
+    
+    // Sync photoIdToDownload if on download path
+    if (currentPath.startsWith('/download/')) {
+      const photoIdFromPath = currentPath.split('/')[2];
+      if (photoIdFromPath && photoIdFromPath !== photoIdToDownload) {
+        setPhotoIdToDownload(photoIdFromPath);
+      }
+    }
+    
+    // Sync sessionCodeForPhotos if on session-photos path
+    if (currentPath.startsWith('/session/') && currentPath.includes('/photos')) {
+      const parts = currentPath.split('/');
+      if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'photos') {
+        const sessionCodeFromPath = parts[2];
+        if (sessionCodeFromPath && sessionCodeFromPath !== sessionCodeForPhotos) {
+          setSessionCodeForPhotos(sessionCodeFromPath);
+        }
+      }
+    }
+    
+    // Sync sessionCodeForDetails if on session-details path
+    if (currentPath.startsWith('/session/') && currentPath.includes('/details')) {
+      const parts = currentPath.split('/');
+      if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'details') {
+        const sessionCodeFromPath = parts[2];
+        if (sessionCodeFromPath && sessionCodeFromPath !== sessionCodeForDetails) {
+          setSessionCodeForDetails(sessionCodeFromPath);
+        }
+      }
+    }
+  }, [photoIdToDownload, sessionCodeForPhotos, sessionCodeForDetails]); // Watch state, path is read inside effect
 
   // Listen for popstate events (back/forward buttons)
   useEffect(() => {
@@ -237,10 +273,6 @@ function App() {
     const parts = path.split('/');
     if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'photos') {
       effectiveSessionCode = parts[2];
-      // Update state if not set yet
-      if (effectiveSessionCode && effectiveSessionCode !== sessionCodeForPhotos) {
-        setSessionCodeForPhotos(effectiveSessionCode);
-      }
     }
   }
 
@@ -249,10 +281,6 @@ function App() {
     const parts = path.split('/');
     if (parts.length >= 4 && parts[1] === 'session' && parts[3] === 'details') {
       effectiveSessionCodeForDetails = parts[2];
-      // Update state if not set yet
-      if (effectiveSessionCodeForDetails && effectiveSessionCodeForDetails !== sessionCodeForDetails) {
-        setSessionCodeForDetails(effectiveSessionCodeForDetails);
-      }
     }
   }
 
@@ -260,9 +288,6 @@ function App() {
   let effectivePhotoId = photoIdToDownload;
   if (isDownloadPath && !effectivePhotoId) {
     effectivePhotoId = path.split('/')[2];
-    if (effectivePhotoId && effectivePhotoId !== photoIdToDownload) {
-      setPhotoIdToDownload(effectivePhotoId);
-    }
   }
 
   // Debug logging
@@ -271,11 +296,15 @@ function App() {
   // CRITICAL: If we're on a download path, NEVER render PermissionPage or TemplateSelector
   // This prevents any permission-related redirects
   if (isDownloadPath) {
+    // Extract photoId directly from path if not already set in state
+    const photoIdFromPath = path.split('/')[2];
+    const finalPhotoId = effectivePhotoId || photoIdFromPath;
+    
     return (
       <div id="app-container">
-        {effectivePhotoId ? (
+        {finalPhotoId ? (
           <Suspense fallback={<LoadingFallback />}>
-            <DownloadPage photoId={effectivePhotoId} />
+            <DownloadPage photoId={finalPhotoId} />
           </Suspense>
         ) : (
           <div style={{ padding: '20px', textAlign: 'center' }}>
@@ -289,23 +318,49 @@ function App() {
   }
 
   // CRITICAL: If we're on session-photos path, NEVER render PermissionPage or TemplateSelector
-  if (isSessionPhotosPath && effectiveSessionCode) {
+  if (isSessionPhotosPath) {
+    // Extract sessionCode directly from path if not already set
+    const parts = path.split('/');
+    const sessionCodeFromPath = parts.length >= 4 && parts[1] === 'session' && parts[3] === 'photos' ? parts[2] : null;
+    const finalSessionCode = effectiveSessionCode || sessionCodeFromPath;
+    
     return (
       <div id="app-container">
-        <Suspense fallback={<LoadingFallback />}>
-          <SessionPhotosPage sessionCode={effectiveSessionCode} />
-        </Suspense>
+        {finalSessionCode ? (
+          <Suspense fallback={<LoadingFallback />}>
+            <SessionPhotosPage sessionCode={finalSessionCode} />
+          </Suspense>
+        ) : (
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <h1>Invalid Session Link</h1>
+            <p>Session code not found in URL.</p>
+            <p>URL: {path}</p>
+          </div>
+        )}
       </div>
     );
   }
 
   // CRITICAL: If we're on session-details path, NEVER render PermissionPage or TemplateSelector
-  if (isSessionDetailsPath && effectiveSessionCodeForDetails) {
+  if (isSessionDetailsPath) {
+    // Extract sessionCode directly from path if not already set
+    const parts = path.split('/');
+    const sessionCodeFromPath = parts.length >= 4 && parts[1] === 'session' && parts[3] === 'details' ? parts[2] : null;
+    const finalSessionCode = effectiveSessionCodeForDetails || sessionCodeFromPath;
+    
     return (
       <div id="app-container">
-        <Suspense fallback={<LoadingFallback />}>
-          <SessionDetailsPage sessionCode={effectiveSessionCodeForDetails} />
-        </Suspense>
+        {finalSessionCode ? (
+          <Suspense fallback={<LoadingFallback />}>
+            <SessionDetailsPage sessionCode={finalSessionCode} />
+          </Suspense>
+        ) : (
+          <div style={{ padding: '20px', textAlign: 'center' }}>
+            <h1>Invalid Session Link</h1>
+            <p>Session code not found in URL.</p>
+            <p>URL: {path}</p>
+          </div>
+        )}
       </div>
     );
   }
@@ -322,10 +377,11 @@ function App() {
   }
 
   // For root path and other paths, render normally
+  // CRITICAL: Never render TemplateSelector or PermissionPage on special paths
   return (
     <div id="app-container" className={currentPage === 'photobooth' ? 'capture-screen' : ''}>
       {/* Template selector - only if not on special paths */}
-      {currentPage === 'template' && (
+      {currentPage === 'template' && !isSpecialPath && (
         <TemplateSelector
           onTemplateSelected={handleTemplateSelected}
           onBack={handleBackToPermission}
@@ -333,14 +389,14 @@ function App() {
       )}
       
       {/* Photo booth - only if not on special paths */}
-      {currentPage === 'photobooth' && selectedTemplate && (
+      {currentPage === 'photobooth' && selectedTemplate && !isSpecialPath && (
         <Suspense fallback={<LoadingFallback />}>
           <PhotoBoothApp template={selectedTemplate} onBackToTemplate={handleBackToTemplate} />
         </Suspense>
       )}
       
-      {/* Permission page - ONLY if root path */}
-      {isRootPath && (
+      {/* Permission page - ONLY if root path and not on special paths */}
+      {isRootPath && !isSpecialPath && (
         <PermissionPage
           onPermissionGranted={handlePermissionGranted}
           autoProceedIfGranted={permissionAutoProceed}
