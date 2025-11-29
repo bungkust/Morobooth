@@ -2780,6 +2780,13 @@ button:disabled {
   flex-wrap: nowrap;
 }
 
+.setting-group .field-label.toggle-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  margin: 0;
+}
+
 .setting-help {
   font-size: 12px;
   font-weight: normal;
@@ -4427,18 +4434,94 @@ button:disabled {
   width: 100%;
   box-sizing: border-box;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--spacing-md), 2.5vw, var(--spacing-xl));
+}
+
+/* Top section with Session Info and Statistics side by side */
+.session-details-top-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(var(--spacing-md), 2.5vw, var(--spacing-lg));
+  width: 100%;
+}
+
+.session-info-card,
+.session-stats-card {
+  margin: 0;
+}
+
+/* Settings section */
+.session-details-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--spacing-md), 2.5vw, var(--spacing-lg));
+  width: 100%;
+}
+
+.settings-card {
+  margin: 0;
+}
+
+.settings-content {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--spacing-md), 2vw, var(--spacing-lg));
+}
+
+/* Actions card */
+.actions-card {
+  margin: 0;
+  margin-top: auto;
 }
 
 .session-details-actions {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  width: 100%;
+}
+
+.session-details-actions .save-btn {
+  width: 100%;
+  padding: clamp(12px, 1.5vw, 16px) clamp(20px, 3vw, 24px);
+  font-size: clamp(var(--font-base), 1.5vw, var(--font-lg));
+  font-weight: 600;
+}
+
+.actions-secondary {
+  display: flex;
+  gap: var(--spacing-sm);
   flex-wrap: wrap;
 }
 
+.actions-secondary button {
+  flex: 1;
+  min-width: 140px;
+}
+
+/* Setting help inline */
+.setting-help-inline {
+  font-size: 12px;
+  font-weight: normal;
+  color: #666;
+  font-style: italic;
+  margin-left: 8px;
+  display: inline;
+}
+
 .info-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: clamp(10px, 1.5vw, 14px);
+}
+
+@media (min-width: 768px) {
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: clamp(12px, 2vw, 16px);
+  }
 }
 
 .value.valid {
@@ -5131,11 +5214,44 @@ button:disabled {
     width: 100%;
   }
 
+  /* Session Details Page Responsive */
+  .session-details-top-section {
+    grid-template-columns: 1fr;
+    gap: var(--spacing-md);
+  }
+
+  .session-details-content {
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+  }
+
+  .session-details-settings-section {
+    gap: var(--spacing-md);
+  }
+
+  .settings-content {
+    gap: var(--spacing-md);
+  }
+
+  .actions-secondary {
+    flex-direction: column;
+  }
+
+  .actions-secondary button {
+    width: 100%;
+  }
+
   .session-details-actions {
     flex-direction: column;
   }
 
   .session-details-actions button {
     width: 100%;
+  }
+
+  .setting-help-inline {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
   }
 }

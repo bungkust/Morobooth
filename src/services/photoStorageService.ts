@@ -1,5 +1,6 @@
 import { openDB } from 'idb';
 import { getCurrentSession, incrementPhotoCount } from './sessionService';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 
 export interface PhotoRecord {
   id: string;
@@ -252,7 +253,133 @@ export async function updatePhotoSupabasePath(id: string, path: string) {
 }
 
 export async function getPhotosBySession(sessionCode: string): Promise<PhotoRecord[]> {
-  const db = await getDB();
-  const index = (await db.transaction(PHOTO_STORE).objectStore(PHOTO_STORE)).index('sessionCode');
-  return index.getAll(sessionCode);
+  console.log(`[getPhotosBySession] Starting fetch for session: ${sessionCode}`);
+  
+  // First, get photos from local IndexedDB
+  let localPhotos: PhotoRecord[] = [];
+  try {
+    const db = await getDB();
+    const index = (await db.transaction(PHOTO_STORE).objectStore(PHOTO_STORE)).index('sessionCode');
+    localPhotos = await index.getAll(sessionCode);
+    console.log(`[getPhotosBySession] Found ${localPhotos.length} photos from IndexedDB`);
+  } catch (err) {
+    console.error('[getPhotosBySession] Error fetching from IndexedDB:', err);
+  }
+  
+  // Also try to get photos from Supabase if configured
+  if (isSupabaseConfigured() && supabase) {
+    try {
+      console.log(`[getPhotosBySession] Fetching photos from Supabase for session: ${sessionCode}`);
+      const { data: supabasePhotos, error } = await supabase
+        .from('photos')
+        .select('photo_id, session_code, photo_number, image_data_url, timestamp, uploaded, supabase_url')
+        .eq('session_code', sessionCode)
+        .order('photo_number', { ascending: true });
+      
+      if (error) {
+        console.error('[getPhotosBySession] Error fetching from Supabase:', error);
+        console.error('[getPhotosBySession] Error code:', error.code);
+        console.error('[getPhotosBySession] Error message:', error.message);
+        console.error('[getPhotosBySession] Error details:', error);
+        // Return local photos if Supabase query fails
+        console.log(`[getPhotosBySession] Returning ${localPhotos.length} photos from IndexedDB (Supabase failed)`);
+        return localPhotos;
+      }
+      
+      console.log(`[getPhotosBySession] Supabase query successful, found ${supabasePhotos?.length || 0} photos`);
+      
+      // Check if we got data from Supabase
+      if (supabasePhotos && Array.isArray(supabasePhotos) && supabasePhotos.length > 0) {
+        console.log(`[getPhotosBySession] Processing ${supabasePhotos.length} photos from Supabase`);
+        // Convert Supabase photos to PhotoRecord format
+        const supabasePhotoRecords: PhotoRecord[] = supabasePhotos
+          .filter((row: any) => {
+            // Filter out invalid rows
+            if (!row.photo_id || !row.session_code) {
+              console.warn('[getPhotosBySession] Skipping invalid photo row:', row);
+              return false;
+            }
+            return true;
+          })
+          .map((row: any) => {
+            // Ensure timestamp is in ISO string format
+            let timestamp = row.timestamp;
+            if (timestamp) {
+              try {
+                // If it's already a string, use it; otherwise convert to ISO string
+                if (typeof timestamp === 'string') {
+                  const date = new Date(timestamp);
+                  if (isNaN(date.getTime())) {
+                    console.warn('[getPhotosBySession] Invalid timestamp string:', timestamp);
+                    timestamp = new Date().toISOString();
+                  } else {
+                    timestamp = date.toISOString();
+                  }
+                } else if (timestamp instanceof Date) {
+                  timestamp = timestamp.toISOString();
+                } else {
+                  timestamp = new Date().toISOString();
+                }
+              } catch (e) {
+                console.warn('[getPhotosBySession] Error parsing timestamp:', e);
+                timestamp = new Date().toISOString();
+              }
+            } else {
+              timestamp = new Date().toISOString();
+            }
+            
+            // Handle image_data_url - it might be empty or null if photo is only in storage
+            // For statistics purposes, we don't need the full image data
+            // Use empty string if not available (photos in storage can be accessed via supabase_url)
+            const imageDataURL = row.image_data_url || '';
+            
+            return {
+              id: String(row.photo_id),
+              sessionCode: String(row.session_code),
+              photoNumber: Number(row.photo_number) || 0,
+              imageDataURL: imageDataURL,
+              timestamp: timestamp,
+              uploaded: Boolean(row.uploaded),
+              supabaseUrl: row.supabase_url || undefined
+            };
+          });
+        
+        // Merge local and Supabase photos, prioritizing Supabase data
+        // Create a map of photo IDs from Supabase
+        const supabasePhotoMap = new Map(supabasePhotoRecords.map(p => [p.id, p]));
+        
+        // Add local photos that don't exist in Supabase
+        const mergedPhotos: PhotoRecord[] = [...supabasePhotoRecords];
+        localPhotos.forEach(localPhoto => {
+          if (!supabasePhotoMap.has(localPhoto.id)) {
+            mergedPhotos.push(localPhoto);
+          }
+        });
+        
+        // Sort by photo number
+        mergedPhotos.sort((a, b) => a.photoNumber - b.photoNumber);
+        
+        console.log(`[getPhotosBySession] Found ${supabasePhotoRecords.length} photos from Supabase, ${localPhotos.length} from local, ${mergedPhotos.length} total`);
+        return mergedPhotos;
+      } else {
+        // Supabase returned empty array or null
+        console.log(`[getPhotosBySession] Supabase returned no photos (empty array or null)`);
+        console.log(`[getPhotosBySession] Returning ${localPhotos.length} photos from IndexedDB`);
+        return localPhotos;
+      }
+    } catch (err) {
+      console.error('[getPhotosBySession] Exception fetching from Supabase:', err);
+      if (err instanceof Error) {
+        console.error('[getPhotosBySession] Exception message:', err.message);
+        console.error('[getPhotosBySession] Exception stack:', err.stack);
+      }
+      // Return local photos if Supabase fetch fails
+      console.log(`[getPhotosBySession] Returning ${localPhotos.length} photos from IndexedDB (exception occurred)`);
+      return localPhotos;
+    }
+  }
+  
+  // Return local photos if Supabase is not configured
+  console.log(`[getPhotosBySession] Supabase not configured, returning ${localPhotos.length} photos from IndexedDB`);
+  return localPhotos;
 }
